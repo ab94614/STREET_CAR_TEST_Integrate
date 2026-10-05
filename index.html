@@ -1,0 +1,3291 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台灣亂逛賽車</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚗</text></svg>">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;font-family:"Noto Sans TC",sans-serif}
+#map{position:absolute;inset:0;background:#ddd;z-index:0}
+#cv{position:absolute;inset:0;z-index:500;pointer-events:none}
+.hud{position:absolute;z-index:1000;color:#fff;background:rgba(0,0,0,.68);padding:10px 14px;border-radius:10px}
+#speedBox{left:12px;bottom:12px;text-align:center;min-width:110px}
+#speed{font-size:42px;font-weight:bold;line-height:1}
+#cityBox{right:12px;top:12px}
+#cityBox select,#cityBox button{margin-top:4px;padding:4px 8px;width:100%}
+#help{left:12px;top:12px;font-size:11px;line-height:1.45}
+#stats{left:12px;top:285px;font-size:14px;line-height:1.8}
+#hpbar{display:inline-block;width:120px;height:10px;background:#555;border-radius:5px;overflow:hidden;vertical-align:middle}
+#hpfill{display:block;height:100%;width:100%;background:#66bb6a}
+#fuelbar{display:inline-block;width:120px;height:10px;background:#555;border-radius:5px;overflow:hidden;vertical-align:middle}
+#fuelfill{display:block;height:100%;width:100%;background:#ffa726}
+#parkHud{position:fixed;top:64px;left:50%;transform:translateX(-50%);display:none;background:rgba(0,0,0,.65);color:#fff;padding:6px 14px;border-radius:8px;font-size:14px;z-index:1000;text-align:center;pointer-events:none}
+#coord{right:12px;bottom:12px;font-size:12px;text-align:right}
+#roadBox{left:50%;transform:translateX(-50%);bottom:12px;display:flex;align-items:center;gap:12px;min-width:220px}
+#limitSign{width:48px;height:48px;border-radius:50%;background:#fff;color:#000;border:5px solid #d32f2f;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;flex:none}
+#roadName{font-weight:bold;font-size:16px}
+#roadType{font-size:12px;opacity:.8}
+#warn{position:absolute;z-index:1000;left:50%;top:18%;transform:translateX(-50%);background:rgba(211,47,47,.85);color:#fff;padding:8px 18px;border-radius:20px;font-weight:bold;display:none}
+#status{left:50%;top:12px;transform:translateX(-50%);font-size:12px;text-align:center}
+#map.offroad{filter:sepia(.4) saturate(1.3)}
+#flash{position:absolute;inset:0;background:#f00;opacity:0;z-index:999;pointer-events:none;transition:opacity .2s}
+#toasts{position:absolute;z-index:1001;left:50%;top:26%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.toast{padding:6px 14px;border-radius:16px;color:#fff;font-weight:bold;background:rgba(0,0,0,.8);font-size:15px}
+#over{position:absolute;inset:0;z-index:2000;background:rgba(0,0,0,.75);color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+#over button{font-size:18px;padding:8px 24px}
+
+#loading{position:absolute;inset:0;z-index:3000;background:rgba(20,24,32,.96);color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#loading .spin{width:56px;height:56px;border:6px solid #444;border-top-color:#66bb6a;
+  border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#loading .bar{width:260px;height:8px;background:#444;border-radius:4px;overflow:hidden}
+#loading .bar i{display:block;height:100%;width:0;background:#66bb6a;transition:width .3s}
+#loading small{opacity:.7}
+
+#camWarn{position:absolute;z-index:1000;left:50%;top:9%;transform:translateX(-50%);
+  background:rgba(25,118,210,.88);color:#fff;padding:6px 16px;border-radius:18px;
+  font-weight:bold;font-size:15px;display:none}
+#camWarn.over{background:rgba(211,47,47,.92)}
+#ticket{position:absolute;z-index:1500;left:12px;bottom:130px;
+  background:rgba(255,253,231,.93);color:#222;border:3px solid #d32f2f;border-radius:10px;
+  padding:10px 16px;text-align:center;display:none;box-shadow:0 6px 24px rgba(0,0,0,.5);font-size:13px}
+#ticket h2{margin:0 0 6px;color:#d32f2f;font-size:20px}
+#ticket .amt{font-size:30px;font-weight:bold;color:#d32f2f}
+
+#board{position:absolute;inset:0;z-index:2500;background:rgba(0,0,0,.8);color:#fff;
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+#board table{border-collapse:collapse;background:rgba(255,255,255,.08);min-width:480px}
+#board th,#board td{padding:6px 12px;border-bottom:1px solid #555;text-align:center;font-size:14px}
+#board th{background:rgba(255,255,255,.15)}
+#board tr.me td{background:rgba(255,235,59,.3);font-weight:bold}
+#board button{padding:6px 18px;font-size:15px;margin:0 4px}
+#newRec{color:#ffeb3b;font-size:22px;font-weight:bold;display:none}
+
+#cityBox input{display:block}
+#cityBox{max-width:190px}
+
+#achBox{position:absolute;inset:0;z-index:2500;background:rgba(0,0,0,.82);color:#fff;
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+#achList{display:grid;grid-template-columns:repeat(2,260px);gap:8px;max-height:60vh;overflow:auto}
+.ach{background:rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;font-size:13px;opacity:.45}
+.ach.on{opacity:1;background:rgba(255,235,59,.18);border:1px solid #ffeb3b}
+.ach b{font-size:15px}
+#achBox button{padding:6px 18px;font-size:15px;margin:0 4px}
+
+#intro{position:absolute;inset:0;z-index:4000;background:rgba(10,14,22,.94);color:#fff;
+  display:flex;align-items:center;justify-content:center}
+#introBox{width:min(760px,92vw);max-height:90vh;overflow:auto;padding:22px 28px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);border-radius:14px}
+#introBox h1{margin:0 0 4px;font-size:28px}
+#introBox h3{margin:14px 0 4px;color:#ffeb3b;font-size:16px}
+#introBox p,#introBox li{font-size:14px;line-height:1.7;margin:2px 0}
+#introBox ul{margin:0;padding-left:20px}
+#introBox .cols{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+#introBox kbd{background:#333;border:1px solid #777;border-radius:4px;padding:0 6px;font-size:12px}
+#introFoot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px}
+#introFoot button{font-size:18px;padding:8px 28px}
+#introFoot label{font-size:13px;opacity:.85}
+#introBtn{left:155px;bottom:12px;width:44px;height:44px;border-radius:50%;padding:0;font-size:22px;
+  font-weight:bold;cursor:pointer;border:2px solid rgba(255,255,255,.8);color:#fff}
+@media (max-width:640px){#introBox .cols{grid-template-columns:1fr}}
+
+#introBox .pg{display:none}
+#introBox .pg.on{display:block}
+#introNav{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:12px}
+#introNav button{padding:4px 14px;font-size:14px}
+#introPgTxt{font-size:13px;opacity:.85}
+#carTb{width:100%;border-collapse:collapse;margin-top:6px}
+#carTb th,#carTb td{padding:6px 8px;border-bottom:1px solid #555;text-align:center;font-size:13px}
+#carTb th{background:rgba(255,255,255,.12)}
+#carTb td.nm{text-align:left;white-space:nowrap}
+.carDot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:middle;border:1px solid #fff}
+.bar5{letter-spacing:1px;color:#ffeb3b}
+
+</style>
+</head>
+<body>
+<div id="map"></div>
+<canvas id="cv"></canvas>
+<div id="parkHud"></div>
+<div id="flash"></div>
+<div id="toasts"></div>
+
+<div id="camWarn"></div>
+<div id="ticket"></div>
+
+<div id="intro" style="display:none">
+  <div id="introBox">
+    <h1>🚗 台灣亂逛賽車</h1>
+    <p>在真實的台灣道路上自由開車。道路資料來自 OpenStreetMap,可以傳送到任何縣市鄉鎮。請守法開車,或是故意不守法也行,但警察會來。</p>
+    <div class="pg on" id="introPg1">
+
+    <div class="cols">
+      <div>
+        <h3>🎮 基本操作</h3>
+        <ul>
+          <li><kbd>W</kbd>/<kbd>↑</kbd> 油門　<kbd>S</kbd>/<kbd>↓</kbd> 煞車、倒車</li>
+          <li><kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> 轉向</li>
+          <li><kbd>空白</kbd> 手煞車　<kbd>H</kbd> 喇叭</li>
+          <li><kbd>C</kbd> 換車　<kbd>Q</kbd><kbd>E</kbd> 縮放</li>
+          <li><kbd>Z</kbd> 小地圖範圍　<kbd>T</kbd> 道路疊圖</li>
+          <li><kbd>N</kbd> 接任務　<kbd>R</kbd> 重新開始</li>
+          <li><kbd>J</kbd> 載客任務（綠圈接客，粉紅圈送達）</li>
+          <li><kbd>L</kbd> 排行榜　<kbd>K</kbd> 成就</li>
+          <li><kbd>M</kbd> 靜音　<kbd>F</kbd> FPS　<kbd>I</kbd> 本說明</li>
+          <li><kbd>,</kbd> 左燈　<kbd>.</kbd> 右燈　<kbd>/</kbd> 雙黃燈</li>
+          <li><kbd>G</kbd> 導航加油站　<kbd>Shift</kbd>+<kbd>G</kbd> 導航修車廠</li>
+          <li><kbd>P</kbd> 倒車入庫挑戰（再按一次取消）</li>
+        </ul>
+      </div>
+      <div>
+        <h3>📍 怎麼玩</h3>
+        <ul>
+          <li>右上角選地點,按「出發」或「前往」傳送。</li>
+          <li>按 <kbd>N</kbd> 接送貨任務,依箭頭在時限內送達可得獎勵。</li>
+          <li>也可以輸入縣市、鄉鎮、路名,用「導航」開過去。</li>
+          <li>血量歸零就報銷,分數會進排行榜。</li>
+          <li>里程、罰單、成就會自動存檔。</li>
+          <li>⛽ 開車會耗油，速度越快越耗，<b>油量歸零就熄火</b>，油門失效。</li>
+          <li>⛽ 停在<b>加油站</b> 3 秒：油量 +50、血量 +30。</li>
+          <li>🔧 停在<b>修車廠</b> 3 秒：血量補滿（不補油）。</li>
+          <li>🧭 按 <kbd>G</kbd> 導航到最近加油站，再按換下一間；<kbd>Shift</kbd>+<kbd>G</kbd> 導航修車廠。</li>
+          <li>🗺️ 小地圖橘點是加油站，藍點是修車廠。</li>
+          <li>🅿️ 按 <kbd>P</kbd> 開始倒車入庫：右前方出現綠框，60 秒內<b>倒車</b>停進去，車頭朝外。</li>
+          <li>🅿️ 距離中心 0.9 公尺內、角度偏差 10° 內、車速低於 3 km/h，並保持不動 1.2 秒就過關。</li>
+          <li>🅿️ 過關得分 = 200 + 剩餘秒數 × 5 + 精準度加分（最高 200）；逾時失敗，再按 <kbd>P</kbd> 可取消。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>🚦 交通規則與風險</h3>
+    <div class="cols">
+      <ul>
+        <li>🚦 <b>紅燈</b>不能闖,會被拍照罰款。</li>
+        <li>📷 <b>測速照相</b>超速超過 10 km/h 會開單。</li>
+        <li>🚧 施工錐、坑洞、違停車會扣血,油漬會讓你打滑。</li>
+        <li>🌧️ 下雨路滑,🌫️ 起霧視線差,夜晚要靠車燈。</li>
+        <li>🔥 血量偏低時車子會冒煙、變暗，引擎聲也會變粗；快沒血請找修車廠。</li>
+      </ul>
+      <ul>
+        <li>🚶 撞到行人重罰,還會被通緝。</li>
+        <li>🚨 通緝最高 5 星,警車會追你,被追上就被逮捕。</li>
+        <li>🤪亂切 ⛔逆向 🚦闖紅燈 🛵鑽縫的 AI 車要小心。</li>
+        <li>📱低頭族、🏃亂穿越、👴慢行長者會在路邊出沒。</li>
+      </ul>
+    </div>
+
+    <h3>🔥 得分技巧</h3>
+    <p>驚險閃過車輛、行人、障礙物,以及守法通過測速,都會累積<b>連擊</b>。連擊越高,分數倍率越高(最高 ×5)。撞到東西或違規會讓連擊中斷。</p>
+
+  </div>
+
+    <div class="pg" id="introPg2">
+      <h3>🚗 車款特性（按 <kbd>C</kbd> 換車）</h3>
+      <table id="carTb"></table>
+      <p style="margin-top:8px">⭐ 越多代表越強。車款選擇會自動記住。</p>
+      <ul>
+        <li><b>加速</b>：起步與追趕的速度。</li>
+        <li><b>極速</b>：最高時速上限。</li>
+        <li><b>轉向</b>：方向盤靈敏度。</li>
+        <li><b>抓地</b>：雨天、油漬時不容易打滑。</li>
+        <li><b>車身</b>：越大越容易撞到東西，但視覺上也比較醒目。</li>
+      </ul>
+    </div>
+
+    <div class="pg" id="introPg3">
+      <h3>⛽ 加油小提醒</h3>
+      <ul>
+        <li>補給時車速要低於 5 km/h，並停在站點 12 公尺內。</li>
+        <li>同一個站補給後有 90 秒冷卻（小地圖上的點會變淡），請換別間。</li>
+        <li>油量低於 20 會提示，歸零後車子靠阻力慢慢滑停，仍可轉向與煞車。</li>
+        <li>導航到加油站不會給抵達分數；執行任務時不能改導航。</li>
+        <li>加油站附近的 AI 車會自動減速，開過去請留意車流。</li>
+        <li>站點資料來自 OpenStreetMap，剛傳送完要等幾秒才會出現。</li>
+      </ul>
+      <h3>🧭 相關按鍵</h3>
+      <ul>
+        <li><kbd>G</kbd> 導航到最近加油站，再按換下一間</li>
+        <li><kbd>Shift</kbd>+<kbd>G</kbd> 導航到最近修車廠</li>
+        <li><kbd>Z</kbd> 切換小地圖範圍，橘點＝加油站、藍點＝修車廠</li>
+        <li><kbd>P</kbd> 倒車入庫挑戰：60 秒內倒車停進綠框，車頭朝外</li>
+      </ul>
+    </div>
+
+
+    <div id="introNav">
+      <button id="introPrev">◀ 上一頁</button>
+      <span id="introPgTxt">1 / 3</span>
+      <button id="introNext">下一頁 ▶</button>
+    </div>
+
+    <div id="introFoot">
+      <label><input type="checkbox" id="introSkip"> 下次不再自動顯示</label>
+      <button id="introStart">🏁 開始遊戲 (Enter)</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spin"></div>
+  <h2 id="loadTitle">🗺️ 地圖載入中…</h2>
+  <div class="bar"><i id="loadBar"></i></div>
+  <small id="loadTip">正在向 OpenStreetMap 取得道路資料，首次可能需要 10～40 秒</small>
+</div>
+
+
+<div class="hud" id="help">
+<b>🚗 操作</b><br>
+W/↑ 油門　S/↓ 煞車倒車<br>
+A D/← → 轉向　空白 手煞車<br>
+Q E 縮放　Z 小地圖　C 換車<br>
+R 重新開始　T 道路疊圖<br>
+J 載客　N 接任務　M 靜音　H 喇叭　L 排行榜<br>
+K 成就　F 顯示 FPS　I 說明<br>
+, 左燈　. 右燈　/ 雙黃燈<br>
+G 導航加油站　Shift+G 修車廠<br>
+P 倒車入庫挑戰，再按取消<br>
+🤪亂切 ⛔逆向 🚦闖紅燈 🛵鑽縫<br>
+📱低頭族 🏃亂穿越 👴慢行長者
+</div>
+
+<div class="hud" id="stats">
+❤️ <span id="hpbar"><i id="hpfill"></i></span> <span id="hpnum">100</span><br>
+⛽ <span id="fuelbar"><i id="fuelfill"></i></span> <span id="fuelnum">100</span><br>
+🏆 分數 <b id="score">0</b>　🚶撞人 <b id="hitCnt">0</b><br>
+🎫 罰單 <b id="tkCnt">0</b>　💸 $<b id="tkFine">0</b><br>
+🥇 最高分 <b id="bestScore">0</b><br>
+🚖 載客收入 $<b id="rideMoney">0</b><br>
+🚦 <span id="light">-</span>
+<br>🕒 <span id="envTxt">-</span>
+</div>
+
+<div class="hud" id="status">道路資料：初始化…</div>
+
+<div class="hud" id="cityBox">
+<b>📍 傳送地點</b><br>
+<select id="citySel"></select>
+<button id="goBtn">熱門地點出發！</button>
+<hr style="border:0;border-top:1px solid #666;margin:8px 0 4px">
+<select id="countySel"><option value="">— 選擇縣市 —</option></select>
+<select id="townSel"><option value="">(整個縣市)</option></select>
+<input id="villInput" placeholder="村里／路名（選填）" style="margin-top:4px;padding:4px 8px;width:100%;box-sizing:border-box">
+<button id="goTownBtn">🔎 前往</button>
+<button id="navBtn">🧭 導航到此</button>
+<button id="navCancel">❌ 取消導航</button>
+<button id="fuelNavBtn">⛽ 最近加油站 (G)</button>
+<button id="missionBtn">📦 接任務 (N)</button>
+<button id="rideBtn">🧍 載客 (J)</button>
+<button id="boardBtn">🏆 排行榜 (L)</button>
+<button id="achBtn">🏅 成就 (K)</button>
+</div>
+
+
+<div class="hud" id="speedBox"><div id="speed">0</div><div>km/h</div></div>
+
+<div class="hud" id="roadBox">
+<div id="limitSign">--</div>
+<div><div id="roadName">定位中…</div><div id="roadType"></div></div>
+</div>
+
+<canvas id="mini" width="180" height="180" style="position:absolute;z-index:1000;right:12px;bottom:56px;border-radius:50%;border:3px solid rgba(255,255,255,.85);background:rgba(20,24,32,.82);box-shadow:0 2px 10px rgba(0,0,0,.5);pointer-events:none"></canvas>
+
+<button class="hud" id="introBtn" title="遊戲說明 (I)">❓</button>
+<div class="hud" id="coord"></div>
+<div class="hud" id="wantedHud" style="display:none;right:230px;top:12px;font-size:22px;text-align:right"></div>
+<div class="hud" id="comboHud" style="display:none;right:230px;top:60px;text-align:right;min-width:120px">
+  <div id="comboTxt" style="font-size:22px;font-weight:bold;color:#ffeb3b"></div>
+  <div style="height:5px;background:#555;border-radius:3px;margin-top:4px;overflow:hidden"><i id="comboBar" style="display:block;height:100%;width:100%;background:#ffeb3b"></i></div>
+</div>
+
+<div class="hud" id="navHud" style="display:none;left:50%;top:130px;transform:translateX(-50%);text-align:center;min-width:150px">
+  <canvas id="navArrow" width="64" height="64"></canvas>
+  <div id="navTxt" style="font-size:14px;font-weight:bold"></div>
+</div>
+<div id="warn">⚠️ 開到路外了！</div>
+
+<div id="board">
+
+  <div id="achBox">
+  <h1>🏅 成就</h1>
+  <div id="achSum" style="font-size:14px;text-align:center;line-height:1.7"></div>
+  <div id="achList"></div>
+  <div>
+    <button id="achClose">關閉</button>
+    <button id="achReset">清除存檔</button>
+  </div>
+</div>
+
+  <h1>🏆 排行榜</h1>
+  <table id="boardTb"></table>
+  <div>
+    <button id="boardClose">關閉</button>
+    <button id="boardClear">清除紀錄</button>
+  </div>
+</div>
+
+
+<div id="over">
+<h1>💥 車子報銷了</h1>
+<div id="overTxt"></div>
+
+<div id="newRec">🎉 新紀錄！</div>
+<button id="overBoard">🏆 查看排行榜</button>
+
+
+<button id="again">重新開始 (R)</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ================= 第 2 段 =================
+const LAT0=23.8, LON0=121.0, KY=111320, KX=111320*Math.cos(LAT0*Math.PI/180);
+const toLL=(x,y)=>[LAT0+y/KY, LON0+x/KX];
+const toXY=(lat,lon)=>({x:(lon-LON0)*KX, y:(lat-LAT0)*KY});
+const $=id=>document.getElementById(id);
+
+const CITIES={
+  "台北 101":[25.0340,121.5645],"台北車站":[25.0478,121.5170],
+  "新北 板橋":[25.0143,121.4627],"桃園 中壢":[24.9537,121.2255],
+  "新竹 東區":[24.8010,120.9710],"台中 逢甲":[24.1785,120.6465],
+  "彰化 員林":[23.9590,120.5740],"嘉義 文化路":[23.4800,120.4490],
+  "台南 赤崁樓":[22.9970,120.2027],"高雄 85 大樓":[22.6110,120.3000],
+  "花蓮 市區":[23.9770,121.6040],"宜蘭 羅東":[24.6770,121.7680]
+};
+const sel=$('citySel');
+Object.keys(CITIES).forEach(k=>sel.add(new Option(k,k)));
+
+const ROAD={
+  motorway:{limit:100,half:9,name:'高速公路',color:'#e53935'},
+  motorway_link:{limit:60,half:5,name:'交流道匝道',color:'#ef6c00'},
+  trunk:{limit:80,half:8,name:'快速道路',color:'#fb8c00'},
+  trunk_link:{limit:50,half:5,name:'快速道路匝道',color:'#ef6c00'},
+  primary:{limit:60,half:7,name:'省道/主要幹道',color:'#f9a825'},
+  primary_link:{limit:40,half:4,name:'幹道匝道',color:'#f9a825'},
+  secondary:{limit:50,half:6,name:'次要幹道',color:'#7cb342'},
+  secondary_link:{limit:40,half:4,name:'匝道',color:'#7cb342'},
+  tertiary:{limit:50,half:5,name:'一般道路',color:'#00acc1'},
+  tertiary_link:{limit:40,half:4,name:'匝道',color:'#00acc1'},
+  unclassified:{limit:40,half:4,name:'鄉道/一般道路',color:'#78909c'},
+  residential:{limit:40,half:4,name:'住宅區道路',color:'#90a4ae'},
+  living_street:{limit:20,half:3,name:'生活巷弄',color:'#ab47bc'},
+  service:{limit:30,half:3,name:'巷道/服務道路',color:'#8d6e63'}
+};
+const HW_REGEX='^('+Object.keys(ROAD).join('|')+')$';
+
+// ---- 地圖與畫布 ----
+const map=L.map('map',{zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,
+  boxZoom:false,keyboard:false,touchZoom:false,zoomAnimation:false,fadeAnimation:false,zoomSnap:1});
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:19,maxNativeZoom:19,attribution:'Tiles © Esri'}).addTo(map);
+
+map.setView([25.0340,121.5645],19);
+const cv=$('cv'), ctx=cv.getContext('2d');
+let W=0,H=0;
+function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight;map.invalidateSize();}
+addEventListener('resize',resize); resize();
+
+// ---- 玩家車 ----
+const car={x:0,y:0,heading:0,speed:0,hp:100,score:0,hits:0,dead:false,
+  tickets:0,fines:0,fuel:100,
+  maxSpeed:45,accel:12,brake:25,drag:0.4,reverseMax:-8};
+
+let zoom=19, gt=0;
+
+// ---- 道路資料 ----
+const CELL=0.003, BK=100;
+const ENDPOINTS=[
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter'
+];
+
+
+/*const ENDPOINTS=[
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];*/
+
+
+
+let epIdx=0, inflight=0;
+const MAXPAR=4;
+const ways=[], wayIds=new Set(), buckets=new Map(), cellState=new Map(), queue=[];
+const cellOf=(lat,lng)=>[Math.floor(lat/CELL),Math.floor(lng/CELL)];
+const carLL=()=>toLL(car.x,car.y);
+
+function addWay(el){
+  if(wayIds.has(el.id)||!el.geometry||el.geometry.length<2) return;
+  wayIds.add(el.id);
+  const cfg=ROAD[el.tags&&el.tags.highway]; if(!cfg) return;
+  const pts=el.geometry.map(p=>toXY(p.lat,p.lon));
+  const cum=[0];
+  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));
+  const t=el.tags, lanes=parseInt(t.lanes)||0;
+  const w={id:el.id,pts,cum,len:cum[cum.length-1],cfg,
+    name:t.name||t['name:zh']||t.ref||'',
+    limit:parseInt(t.maxspeed)||cfg.limit,
+    oneway:t.oneway==='yes'||t.oneway==='1'||t.junction==='roundabout',
+    half:cfg.half+(lanes>2?(lanes-2)*1.5:0)};
+  if(w.len<5) return;
+  ways.push(w);
+  nsCache.clear();
+  maybeCam(w);
+  maybeObstacles(w);
+  for(let k=0;k<pts.length;k++) touchNode(pts[k],w,(k===0||k===pts.length-1)?1:2);
+  for(let k=0;k<pts.length-1;k++){
+    const a=pts[k],b=pts[k+1],sg={a,b,w};
+    const i0=Math.floor(Math.min(a.x,b.x)/BK),i1=Math.floor(Math.max(a.x,b.x)/BK);
+    const j0=Math.floor(Math.min(a.y,b.y)/BK),j1=Math.floor(Math.max(a.y,b.y)/BK);
+    if((i1-i0+1)*(j1-j0+1)>60) continue;
+    for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
+      const key=i+','+j; let arr=buckets.get(key);
+      if(!arr) buckets.set(key,arr=[]);
+      arr.push(sg);
+    }
+  }
+}
+// ---------- 道路快取（IndexedDB） ----------
+let dbp=null;
+function dbOpen(){
+  if(dbp) return dbp;
+  dbp=new Promise(res=>{
+    try{
+      const rq=indexedDB.open('tw_race_cache_v2',1);
+      rq.onupgradeneeded=()=>rq.result.createObjectStore('cells');
+      rq.onsuccess=()=>res(rq.result);
+      rq.onerror=()=>res(null);
+    }catch(e){res(null);}
+  });
+  return dbp;
+}
+async function cacheGet(key){
+  const db=await dbOpen(); if(!db) return null;
+  return new Promise(res=>{
+    try{
+      const rq=db.transaction('cells').objectStore('cells').get(key);
+      rq.onsuccess=()=>{
+        const v=rq.result;
+        res(v&&Date.now()-v.t<30*864e5?v.data:null);   // 保留 7 天
+      };
+      rq.onerror=()=>res(null);
+    }catch(e){res(null);}
+  });
+}
+async function cachePut(key,data){
+  const db=await dbOpen(); if(!db) return;
+  try{db.transaction('cells','readwrite').objectStore('cells').put({t:Date.now(),data},key);}catch(e){}
+}
+
+async function fetchCell(i,j){
+  const s=i*CELL,w=j*CELL,n=s+CELL,e=w+CELL;
+  const ckey=i+','+j;
+  const cached=await cacheGet(ckey);
+  if(cached){ cached.forEach(addWay); return true; }
+  const q=`[out:json][timeout:10];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"](${s},${w},${n},${e});out tags geom qt;`;
+
+  // 一次同時問 2 台，誰先成功就用誰；兩台都失敗再換下一組
+  for(let a=0;a<ENDPOINTS.length;a+=2){
+    const urls=[ENDPOINTS[(epIdx+a)%ENDPOINTS.length],
+                ENDPOINTS[(epIdx+a+1)%ENDPOINTS.length]];
+    const ctls=urls.map(()=>new AbortController());
+    const timers=ctls.map(c=>setTimeout(()=>c.abort(),7000));
+    try{
+      const data=await Promise.any(urls.map((u,k)=>
+        fetch(u+'?data='+encodeURIComponent(q),{signal:ctls[k].signal})
+          .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      ));
+      timers.forEach(clearTimeout);
+      ctls.forEach(c=>c.abort());       // 取消還沒回來的那台
+      data.elements.forEach(addWay);
+      cachePut(ckey,data.elements);
+      return true;
+    }catch(err){
+      timers.forEach(clearTimeout);
+      console.warn('Overpass 失敗',urls.join(' , '));
+    }
+  }
+  return false;
+}
+
+
+function pump(){
+  while(inflight<MAXPAR && queue.length){
+    const ll=carLL(), [ci,cj]=cellOf(ll[0],ll[1]);
+    const hx=Math.sin(car.heading), hy=Math.cos(car.heading);
+    const fwd=started && Math.abs(car.speed)>3;
+    const sc=q=>{
+      const di=q[0]-ci, dj=q[1]-cj;
+      let d=Math.hypot(di,dj);
+      if(fwd) d-=Math.max(0,dj*hx+di*hy)*0.5;     // 前方的格子優先
+      return d;
+    };
+    queue.sort((a,b)=>sc(a)-sc(b));
+    const [i,j]=queue.shift(), key=i+','+j;
+    cellState.set(key,'loading');
+    inflight++; updateStatus();
+    fetchCell(i,j).then(ok=>{
+      cellState.set(key, ok?'done':{failAt:performance.now()});
+      inflight--; updateStatus(); pump();
+    });
+  }
+}
+
+function ensureLoaded(){
+  const ll=carLL(), [ci,cj]=cellOf(ll[0],ll[1]);
+  const here=cellState.get(ci+','+cj);
+  let radius=0;
+  if(here==='done'){
+    radius=1;
+    let all=true;
+    for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++){
+      if(cellState.get((ci+di)+','+(cj+dj))!=='done') all=false;
+    }
+    if(all) radius=2;
+  }
+  const cells=[];
+  for(let di=-radius;di<=radius;di++)for(let dj=-radius;dj<=radius;dj++) cells.push([ci+di,cj+dj]);
+
+  // 往行進方向預載 250 / 500 / 800 公尺處
+  if(here==='done' && started && Math.abs(car.speed)>3){
+    const hx=Math.sin(car.heading), hy=Math.cos(car.heading);
+    for(const D of [250,500,800]){
+      const l=toLL(car.x+hx*D, car.y+hy*D), [fi,fj]=cellOf(l[0],l[1]);
+      for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++) cells.push([fi+di,fj+dj]);
+    }
+  }
+
+  for(const [i,j] of cells){
+    const key=i+','+j, st=cellState.get(key);
+    if(st==='done'||st==='loading') continue;
+    if(st&&performance.now()-st.failAt<4000) continue;     // 失敗後 4 秒就重試
+    if(queue.some(q=>q[0]===i&&q[1]===j)) continue;
+    queue.push([i,j]);
+  }
+  pump();
+}
+
+// ---------- 背景補載小路（service） ----------
+const extraState=new Map();   // 'i,j' -> 'loading' | 'done' | {failAt}
+let extraBusy=false;
+
+async function fetchExtra(i,j){
+  const s=i*CELL,w=j*CELL,n=s+CELL,e=w+CELL;
+  const ckey='x'+i+','+j;
+  const cached=await cacheGet(ckey);
+  if(cached){ cached.forEach(addWay); return true; }
+  const q=`[out:json][timeout:10];way["highway"~"^(service)$"]["service"!~"parking_aisle|driveway|drive-through"](${s},${w},${n},${e});out tags geom qt;`;
+  const url=ENDPOINTS[epIdx%ENDPOINTS.length];
+  const ctl=new AbortController();
+  const timer=setTimeout(()=>ctl.abort(),9000);
+  try{
+    const res=await fetch(url+'?data='+encodeURIComponent(q),{signal:ctl.signal});
+    clearTimeout(timer);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const els=data.elements.filter(el=>el.geometry&&el.geometry.length>=3); // 太短的不要
+    els.forEach(addWay);
+    cachePut(ckey,els);
+    return true;
+  }catch(err){
+    clearTimeout(timer);
+    return false;
+  }
+}
+
+async function extraPump(){
+  if(extraBusy||!started||inflight>0||queue.length) return;   // 主要道路還在載就不補
+  const ll=carLL(), [ci,cj]=cellOf(ll[0],ll[1]);
+  for(const [di,dj] of [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+    const i=ci+di,j=cj+dj,key=i+','+j;
+    if(cellState.get(key)!=='done') continue;
+    const st=extraState.get(key);
+    if(st==='done'||st==='loading') continue;
+    if(st&&performance.now()-st.failAt<30000) continue;
+    extraBusy=true; extraState.set(key,'loading');
+    const ok=await fetchExtra(i,j);
+    extraState.set(key, ok?'done':{failAt:performance.now()});
+    extraBusy=false;
+    return;
+  }
+}
+setInterval(extraPump,1500);
+
+
+// ================= 第 2B 段 =================
+function currentCellReady(){
+  const ll=carLL(),[ci,cj]=cellOf(ll[0],ll[1]);
+  return cellState.get(ci+','+cj)==='done';
+}
+function updateStatus(){
+  $('status').innerHTML='道路：'+ways.length+' 條 '+((inflight||queue.length)?'⏳載入中':'✅就緒')+
+    '<br>AI車 '+npcs.length+'　行人 '+peds.length;
+}
+function nearestRoad(x,y){
+  const bi=Math.floor(x/BK),bj=Math.floor(y/BK);
+  let best=null,bs=1e9,bd=0; const seen=new Set();
+  for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++){
+    const arr=buckets.get((bi+di)+','+(bj+dj)); if(!arr) continue;
+    for(const sg of arr){
+      if(seen.has(sg)) continue; seen.add(sg);
+      const dx=sg.b.x-sg.a.x,dy=sg.b.y-sg.a.y,l2=dx*dx+dy*dy;
+      let t=l2?((x-sg.a.x)*dx+(y-sg.a.y)*dy)/l2:0; t=Math.max(0,Math.min(1,t));
+      const d=Math.hypot(sg.a.x+t*dx-x,sg.a.y+t*dy-y), sc=d-sg.w.half;
+      if(sc<bs){bs=sc;best=sg;bd=d;}
+    }
+  }
+  return best?{seg:best,dist:bd,score:bs}:null;
+}
+// ================= 第 3 段 =================
+const npcs=[], peds=[];
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+// 號誌：週期 24 秒。ns=true 代表南北向
+function lightState(ns){
+  const t=gt%24;
+  if(ns) return t<9?'green':(t<12?'yellow':'red');
+  return t<12?'red':(t<21?'green':'yellow');
+}
+function lightLeft(ns){
+  const t=gt%24;
+  if(ns) return t<9?9-t:(t<12?12-t:24-t);
+  return t<12?12-t:(t<21?21-t:24-t);
+}
+function lightRed(ns){return lightState(ns)==='red';}
+
+
+function pointAt(w,s){
+  s=Math.max(0,Math.min(w.len,s));
+  let k=1; while(k<w.cum.length-1&&w.cum[k]<s) k++;
+  const a=w.pts[k-1],b=w.pts[k],sl=(w.cum[k]-w.cum[k-1])||1,t=(s-w.cum[k-1])/sl;
+  return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,tx:(b.x-a.x)/sl,ty:(b.y-a.y)/sl};
+}
+const nsCache=new Map();
+function nearbySegs(x,y){
+  const bi=Math.floor(x/BK),bj=Math.floor(y/BK),key=bi+','+bj;
+  let out=nsCache.get(key);
+  if(out) return out;
+  const seen=new Set(); out=[];
+  for(let di=-2;di<=2;di++)for(let dj=-2;dj<=2;dj++){
+    const a=buckets.get((bi+di)+','+(bj+dj));
+    if(a) for(const s of a) if(!seen.has(s)){seen.add(s);out.push(s);}
+  }
+  if(nsCache.size>60) nsCache.clear();
+  nsCache.set(key,out);
+  return out;
+}
+
+
+// ---------- AI 車輛 ----------
+function place(n){
+  const q=pointAt(n.w,n.s),tx=q.tx*n.dir,ty=q.ty*n.dir;
+  n.x=q.x+ty*n.off; n.y=q.y-tx*n.off; n.ang=Math.atan2(tx,ty);
+}
+function spawnNpc(){
+  const segs=nearbySegs(car.x,car.y); if(!segs.length) return;
+  for(let tries=0;tries<8;tries++){
+    const w=pick(segs).w, s=rnd(0,w.len), p=pointAt(w,s);
+    const d=Math.hypot(p.x-car.x,p.y-car.y);
+    if(d<60||d>220) continue;
+    const r=Math.random();
+    let kind='normal';
+    if(r<.12) kind='cut'; else if(r<.22) kind='wrong'; else if(r<.32) kind='red';
+    const type=Math.random()<.3?'scooter':'car';
+    if(type==='scooter'&&kind==='normal'&&Math.random()<.6) kind='weave';
+    let dir=Math.random()<.5?1:-1;
+    if(w.oneway) dir=(kind==='wrong')?-1:1;
+    const base=w.half*.45*(kind==='wrong'?-1:1);
+    const n={w,s,dir,kind,type,off:base,tgt:base,cutT:0,t:0,hitCD:0,near:false,turn:0,noYield:0,waitT:0,
+      v:0,vt:Math.max(3,w.limit*.75/3.6*rnd(.8,1.1)*(type==='scooter'?1.15:1)),
+      hue:Math.floor(rnd(0,360)),x:0,y:0,ang:0};
+    place(n); npcs.push(n); return;
+  }
+}
+// ---------- 路口 AI ----------
+const STOP_D = 7;      // 停止線距離路口中心（公尺）
+
+// 目前這條路「前進方向」的終點與進入方向
+function endInfo(n){
+  const w=n.w, L=w.pts.length;
+  const e = n.dir>0 ? w.pts[L-1] : w.pts[0];
+  const p = n.dir>0 ? w.pts[L-2] : w.pts[1];
+  const l = Math.hypot(e.x-p.x, e.y-p.y)||1;
+  return {e, ix:(e.x-p.x)/l, iy:(e.y-p.y)/l};
+}
+
+// 列出路口所有可以接上的道路，ang>0 代表左轉
+function junctionOptions(n){
+  const {e,ix,iy}=endInfo(n);
+  const out=[], seen=new Set();
+  for(const sg of nearbySegs(e.x,e.y)){
+    if(sg.w===n.w) continue;
+    for(const pt of [sg.a,sg.b]){
+      if(Math.hypot(pt.x-e.x,pt.y-e.y)>4) continue;
+      const pts=sg.w.pts, k=pts.indexOf(pt); if(k<0) continue;
+      const dirs = k===0 ? [1] : (k===pts.length-1 ? [-1] : [1,-1]);
+      for(const dir of dirs){
+        if(sg.w.oneway && dir<0 && n.kind!=='wrong') continue;
+        const key=sg.w.id+','+k+','+dir;
+        if(seen.has(key)) continue; seen.add(key);
+        const q=pts[k+dir]; if(!q) continue;
+        const l=Math.hypot(q.x-pt.x,q.y-pt.y)||1;
+        const ox=(q.x-pt.x)/l, oy=(q.y-pt.y)/l;
+        const ang=Math.atan2(ix*oy-iy*ox, ix*ox+iy*oy);   // 正=左轉，負=右轉
+        out.push({w:sg.w, s:sg.w.cum[k], dir, ang});
+      }
+    }
+  }
+  return out;
+}
+
+// 提前決定下一條路（結果快取在 n.nx）
+function planNext(n){
+  if(n.nxW===n.w && n.nxD===n.dir) return n.nx;
+  const opts=junctionOptions(n);
+  n.nxW=n.w; n.nxD=n.dir; n.nx=null; n.turn=0; n.nxN=opts.length;
+  if(!opts.length) return null;
+  let tot=0;
+  for(const o of opts){
+    const a=Math.abs(o.ang);
+    o.wt = a<0.52 ? 5 : (a<2.6 ? 2 : 0.05);    // 直行 > 轉彎 >> 迴轉
+    tot+=o.wt;
+  }
+  let r=Math.random()*tot, c=opts[0];
+  for(const o of opts){ r-=o.wt; if(r<=0){c=o;break;} }
+  n.nx=c;
+  const a=Math.abs(c.ang);
+  n.turn = a<0.52 ? 0 : (c.ang>0 ? -1 : 1);     // -1 左、+1 右
+  return c;
+}
+
+function advance(n){
+  const c=planNext(n);
+  n.nx=null; n.nxW=null; n.turn=0;
+  if(c){
+    n.w=c.w; n.dir=c.dir;
+    n.s = c.dir>0 ? Math.max(c.s,0.3) : Math.min(c.s,c.w.len-0.3);
+    return true;
+  }
+  if(!n.w.oneway){ n.dir*=-1; n.s=Math.max(0.5,Math.min(n.w.len-0.5,n.s)); return true; }
+  return false;
+}
+
+// 無號誌路口：是否該讓別人先走
+function mustYield(n,e,ix,iy,nx,rem,onlyOncoming){
+  const myRank=n.w.cfg.half;
+  for(const o of npcs){
+    if(o===n || o.w===n.w) continue;
+    const dx=e.x-o.x, dy=e.y-o.y, d=Math.hypot(dx,dy);
+    if(d>26) continue;
+    const ox=Math.sin(o.ang), oy=Math.cos(o.ang);
+    const dot=ox*ix+oy*iy;
+    if(dot>0.8) continue;                              // 同方向，交給跟車處理
+    if(d>=7 && dx*ox+dy*oy<=0) continue;               // 已離開或正在遠離路口
+    if(dot<-0.8){                                      // 對向車
+      if(nx && nx.ang>0.52 && o.turn!==-1) return true;  // 我左轉才讓直行車
+      continue;
+    }
+    if(onlyOncoming) continue;                         // 有號誌時，側向車交給燈號
+    if(d<7) return true;                               // 路口內有車，先等
+    const oRank=o.w.cfg.half;
+    if(oRank>myRank) return true;                      // 對方是大路
+    if(oRank===myRank && d<rem-2) return true;         // 同級路，對方先到
+  }
+  return false;
+}
+
+function updateNpc(n,dt){
+  n.t+=dt; n.hitCD-=dt;
+  const half=n.w.half;
+  if(n.kind==='cut'){n.cutT-=dt; if(n.cutT<=0){n.cutT=rnd(1.5,3.5);n.tgt=rnd(-half*.8,half*.8);}}
+  else if(n.kind==='weave') n.tgt=Math.sin(n.t*2)*half*.6;
+  n.off+=(n.tgt-n.off)*Math.min(1,dt*2);
+
+  const q=pointAt(n.w,n.s), tx=q.tx*n.dir, ty=q.ty*n.dir;
+  let want=n.vt;
+  const rem=n.dir>0?n.w.len-n.s:n.s;
+
+  // ===== 1. 路口：轉彎減速、號誌、禮讓 =====
+  if(rem<45){
+    const nx=planNext(n), {e,ix,iy}=endInfo(n);
+
+    // 轉彎減速：以煞車距離反推目前允許的速度
+    if(nx){
+      const a=Math.abs(nx.ang);
+      const tv = a<0.52 ? n.vt : (a<1.9 ? 5 : 3.5);
+      want=Math.min(want, Math.sqrt(tv*tv + 2*3*Math.max(0,rem-3)));
+    }
+
+    // 這個路口有沒有號誌
+    let lit=false;
+    for(const l of lights) if(Math.abs(l.x-e.x)<12&&Math.abs(l.y-e.y)<12){lit=true;break;}
+
+    let stop=false;
+    if(lit){
+      if(n.kind!=='red' && rem>3){
+        const st=lightState(Math.abs(iy)>Math.abs(ix));
+        if(st==='red') stop=true;
+        else if(st==='yellow') stop=(rem-STOP_D)>n.v*n.v/8;   // 來得及停才停
+      }
+      // 綠燈左轉：讓對向直行車
+      if(!stop && rem>3 && rem<22 && nx && nx.ang>0.52 && n.noYield<=0 &&
+         mustYield(n,e,ix,iy,nx,rem,true)) stop=true;
+    }else if(rem>3 && rem<22 && (n.nxN||0)>=2){
+      // 無號誌路口禮讓；超過 4 秒就強制通行，避免大家互等
+      if(n.noYield>0) n.noYield-=dt;
+      else if(mustYield(n,e,ix,iy,nx,rem,false)){
+        stop=true; n.waitT=(n.waitT||0)+dt;
+        if(n.waitT>4){ n.noYield=4; n.waitT=0; }
+      }else n.waitT=0;
+    }
+    if(stop) want=Math.min(want, Math.sqrt(2*3*Math.max(0,rem-STOP_D)));
+  }
+  if(n.noYield>0 && !(rem<45)) n.noYield-=dt;
+
+  // ===== 2. 跟車：依距離調整，不貼車尾 =====
+  for(const o of npcs){
+    if(o===n) continue;
+    const dx=o.x-n.x, dy=o.y-n.y, ah=dx*tx+dy*ty;
+    if(ah<=0||ah>=14) continue;
+    if(Math.sin(o.ang)*tx+Math.cos(o.ang)*ty<0.7) continue;   // 只理會同方向的車
+    if(Math.abs(dx*ty-dy*tx)<3) want=Math.min(want, o.v+Math.max(0,ah-5)*0.8);
+  }
+
+  // ===== 3. 禮讓行人 =====
+  for(const p of peds){
+    if(p.hit) continue;
+    const dx=p.x-n.x, dy=p.y-n.y, ah=dx*tx+dy*ty;
+    if(ah<=0||ah>=10) continue;
+    if(Math.abs(dx*ty-dy*tx)<3.5) want=Math.min(want, Math.max(0,ah-3.5)*0.8);
+  }
+
+  // ===== 3.5 加油站附近減速 =====
+  if(n.kind==='normal'||n.kind==='weave') want=Math.min(want, poiSlowLimit(n));
+
+  // ===== 4. 玩家在前方 =====
+  {const dx=car.x-n.x,dy=car.y-n.y,ah=dx*tx+dy*ty;
+   if(ah>0&&ah<10&&Math.abs(dx*ty-dy*tx)<3) want=Math.min(want,3);}
+
+  n.v+=(want-n.v)*Math.min(1,dt*(want<n.v?3:1));
+  n.s+=n.dir*n.v*dt;
+  if(n.s<=0||n.s>=n.w.len){ if(!advance(n)) return false; }
+  n.stuck = n.v<0.3 ? (n.stuck||0)+dt : 0;
+  if(n.stuck>30) return false;     // 卡超過 30 秒才移除（排隊等紅燈會比較久）
+  place(n);
+  return true;
+}
+
+// ---------- #3 加油站附近減速 ----------
+const POI_SLOW_R = 30;      // 開始減速距離（公尺）
+const POI_SLOW_V = 5;       // 最低速度（公尺/秒）
+
+function poiSlowLimit(n){
+  let lim = Infinity;
+  for(const p of pois){
+    const dx = p.x - n.x, dy = p.y - n.y;
+    if(dx > POI_SLOW_R || dx < -POI_SLOW_R || dy > POI_SLOW_R || dy < -POI_SLOW_R) continue;  // 快速排除
+    const d = Math.hypot(dx, dy);
+    if(d > POI_SLOW_R) continue;
+    // 距離 30m → 原速，12m 以內 → 最低速，中間線性內插
+    const t = Math.max(0, Math.min(1, (d - 12) / (POI_SLOW_R - 12)));
+    lim = Math.min(lim, POI_SLOW_V + (n.vt - POI_SLOW_V) * t);
+  }
+  return lim;
+}
+
+
+// ---------- 行人 ----------
+function spawnPed(){
+  const segs=nearbySegs(car.x,car.y); if(!segs.length) return;
+  for(let tries=0;tries<8;tries++){
+    const sg=pick(segs), dx=sg.b.x-sg.a.x, dy=sg.b.y-sg.a.y, l=Math.hypot(dx,dy)||1;
+    if(sg.w.cfg===ROAD.motorway||sg.w.cfg===ROAD.trunk) continue;
+    const t=Math.random(), u={x:dx/l,y:dy/l}, nrm={x:u.y,y:-u.x};
+    const side=Math.random()<.5?1:-1, off=sg.w.half+2;
+    const x=sg.a.x+dx*t+nrm.x*side*off, y=sg.a.y+dy*t+nrm.y*side*off;
+    const d=Math.hypot(x-car.x,y-car.y);
+    if(d<40||d>200) continue;
+    const r=Math.random();
+    const kind=r<.4?'phone':(r<.75?'jay':'elder');
+    peds.push({x,y,u,n:nrm,side,half:sg.w.half,kind,mode:kind==='elder'?'cross':'idle',
+      t:0,crossed:0,hit:false,hitT:0,near:false});
+    return;
+  }
+}
+function updatePed(p,dt){
+  p.t+=dt;
+  if(p.hit){p.hitT-=dt; return p.hitT>0;}
+  let vx=0,vy=0;
+  const dp=Math.hypot(p.x-car.x,p.y-car.y), span=2*(p.half+2);
+  if(p.kind==='phone'){
+    const lat=-p.side*1.2*Math.sin(p.t*.4);
+    vx=p.u.x*1.2+p.n.x*lat; vy=p.u.y*1.2+p.n.y*lat;
+  }else{
+    const sp=p.kind==='jay'?3.5:0.7;
+    if(p.kind==='jay'&&p.mode==='idle'&&dp<45&&car.speed>3) p.mode='cross';
+    if(p.mode==='cross'){
+      vx=-p.side*p.n.x*sp; vy=-p.side*p.n.y*sp; p.crossed+=sp*dt;
+      if(p.crossed>span){p.crossed=0;p.side=-p.side;if(p.kind==='jay')p.mode='idle';}
+    }
+  }
+  p.x+=vx*dt; p.y+=vy*dt;
+  return dp<260;
+}
+
+// ---------- 交通總更新 ----------
+let spT=0;
+function trafficUpdate(dt){
+  spT+=dt;
+  if(spT>.4){
+    spT=0;
+    if(npcs.length<35) spawnNpc();
+    if(peds.length<25) spawnPed();
+    updateStatus();
+  }
+  for(let i=npcs.length-1;i>=0;i--){
+    const n=npcs[i];
+    if(!updateNpc(n,dt)||Math.hypot(n.x-car.x,n.y-car.y)>260) npcs.splice(i,1);
+  }
+  for(let i=peds.length-1;i>=0;i--) if(!updatePed(peds[i],dt)) peds.splice(i,1);
+}
+// ================= 第 5-5 段：縣市鄉鎮選擇 =================
+const TOWNS={
+"臺北市":"中正區 大同區 中山區 松山區 大安區 萬華區 信義區 士林區 北投區 內湖區 南港區 文山區",
+"新北市":"板橋區 三重區 中和區 永和區 新莊區 新店區 樹林區 鶯歌區 三峽區 淡水區 汐止區 瑞芳區 土城區 蘆洲區 五股區 泰山區 林口區 深坑區 石碇區 坪林區 三芝區 石門區 八里區 平溪區 雙溪區 貢寮區 金山區 萬里區 烏來區",
+"桃園市":"桃園區 中壢區 平鎮區 八德區 楊梅區 蘆竹區 大溪區 龍潭區 龜山區 大園區 觀音區 新屋區 復興區",
+"臺中市":"中區 東區 南區 西區 北區 北屯區 西屯區 南屯區 太平區 大里區 霧峰區 烏日區 豐原區 后里區 石岡區 東勢區 和平區 新社區 潭子區 大雅區 神岡區 大肚區 沙鹿區 龍井區 梧棲區 清水區 大甲區 外埔區 大安區",
+"臺南市":"中西區 東區 南區 北區 安平區 安南區 永康區 歸仁區 新化區 左鎮區 玉井區 楠西區 南化區 仁德區 關廟區 龍崎區 官田區 麻豆區 佳里區 西港區 七股區 將軍區 學甲區 北門區 新營區 後壁區 白河區 東山區 六甲區 下營區 柳營區 鹽水區 善化區 大內區 山上區 新市區 安定區",
+"高雄市":"楠梓區 左營區 鼓山區 三民區 鹽埕區 前金區 新興區 苓雅區 前鎮區 旗津區 小港區 鳳山區 林園區 大寮區 大樹區 大社區 仁武區 鳥松區 岡山區 橋頭區 燕巢區 田寮區 阿蓮區 路竹區 湖內區 茄萣區 永安區 彌陀區 梓官區 旗山區 美濃區 六龜區 甲仙區 杉林區 內門區 茂林區 桃源區 那瑪夏區",
+"基隆市":"仁愛區 信義區 中正區 中山區 安樂區 暖暖區 七堵區",
+"新竹市":"東區 北區 香山區",
+"新竹縣":"竹北市 竹東鎮 新埔鎮 關西鎮 湖口鄉 新豐鄉 芎林鄉 橫山鄉 北埔鄉 寶山鄉 峨眉鄉 尖石鄉 五峰鄉",
+"苗栗縣":"苗栗市 頭份市 竹南鎮 後龍鎮 通霄鎮 苑裡鎮 卓蘭鎮 造橋鄉 西湖鄉 頭屋鄉 公館鄉 銅鑼鄉 三義鄉 大湖鄉 獅潭鄉 三灣鄉 南庄鄉 泰安鄉",
+"彰化縣":"彰化市 員林市 和美鎮 鹿港鎮 溪湖鎮 二林鎮 田中鎮 北斗鎮 花壇鄉 芬園鄉 大村鄉 永靖鄉 伸港鄉 線西鄉 福興鄉 秀水鄉 埔心鄉 埔鹽鄉 大城鄉 芳苑鄉 竹塘鄉 社頭鄉 二水鄉 田尾鄉 埤頭鄉 溪州鄉",
+"南投縣":"南投市 埔里鎮 草屯鎮 竹山鎮 集集鎮 名間鄉 鹿谷鄉 中寮鄉 魚池鄉 國姓鄉 水里鄉 信義鄉 仁愛鄉",
+"雲林縣":"斗六市 斗南鎮 虎尾鎮 西螺鎮 土庫鎮 北港鎮 古坑鄉 大埤鄉 莿桐鄉 林內鄉 二崙鄉 崙背鄉 麥寮鄉 東勢鄉 褒忠鄉 臺西鄉 元長鄉 四湖鄉 口湖鄉 水林鄉",
+"嘉義市":"東區 西區",
+"嘉義縣":"太保市 朴子市 布袋鎮 大林鎮 民雄鄉 溪口鄉 新港鄉 六腳鄉 東石鄉 義竹鄉 鹿草鄉 水上鄉 中埔鄉 竹崎鄉 梅山鄉 番路鄉 大埔鄉 阿里山鄉",
+"屏東縣":"屏東市 潮州鎮 東港鎮 恆春鎮 萬丹鄉 長治鄉 麟洛鄉 九如鄉 里港鄉 鹽埔鄉 高樹鄉 萬巒鄉 內埔鄉 竹田鄉 新埤鄉 枋寮鄉 新園鄉 崁頂鄉 林邊鄉 南州鄉 佳冬鄉 琉球鄉 車城鄉 滿州鄉 枋山鄉 三地門鄉 霧臺鄉 瑪家鄉 泰武鄉 來義鄉 春日鄉 獅子鄉 牡丹鄉",
+"宜蘭縣":"宜蘭市 羅東鎮 蘇澳鎮 頭城鎮 礁溪鄉 壯圍鄉 員山鄉 冬山鄉 五結鄉 三星鄉 大同鄉 南澳鄉",
+"花蓮縣":"花蓮市 鳳林鎮 玉里鎮 新城鄉 吉安鄉 壽豐鄉 光復鄉 豐濱鄉 瑞穗鄉 富里鄉 秀林鄉 萬榮鄉 卓溪鄉",
+"臺東縣":"臺東市 成功鎮 關山鎮 卑南鄉 大武鄉 太麻里鄉 東河鄉 長濱鄉 鹿野鄉 池上鄉 綠島鄉 延平鄉 海端鄉 達仁鄉 金峰鄉 蘭嶼鄉",
+"澎湖縣":"馬公市 湖西鄉 白沙鄉 西嶼鄉 望安鄉 七美鄉",
+"金門縣":"金城鎮 金湖鎮 金沙鎮 金寧鄉 烈嶼鄉 烏坵鄉",
+"連江縣":"南竿鄉 北竿鄉 莒光鄉 東引鄉"
+};
+const countySel=$('countySel'), townSel=$('townSel');
+Object.keys(TOWNS).forEach(k=>countySel.add(new Option(k,k)));
+countySel.onchange=()=>{
+  townSel.length=0;
+  townSel.add(new Option('(整個縣市)',''));
+  if(countySel.value) TOWNS[countySel.value].split(' ').forEach(t=>townSel.add(new Option(t,t)));
+  countySel.blur();
+};
+townSel.onchange=()=>townSel.blur();
+sel.onchange=()=>sel.blur();
+
+// 座標查詢（含 localStorage 快取）
+const GEO_KEY='tw_geo_v1';
+function geoCache(){try{return JSON.parse(localStorage.getItem(GEO_KEY))||{};}catch(e){return {};}}
+async function geocode(q){
+  const c=geoCache();
+  if(c[q]) return c[q];
+  try{
+    const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw'+
+      '&accept-language=zh-TW&q='+encodeURIComponent(q);
+    const res=await fetch(url);
+    if(!res.ok) return null;
+    const arr=await res.json();
+    if(!arr.length) return null;
+    const pos=[parseFloat(arr[0].lat),parseFloat(arr[0].lon)];
+    c[q]=pos;
+    try{localStorage.setItem(GEO_KEY,JSON.stringify(c));}catch(e){}
+    return pos;
+  }catch(e){return null;}
+}
+async function goPlace(){
+  const county=countySel.value, town=townSel.value;
+  const vill=$('villInput').value.trim();
+  if(!county){toast('請先選擇縣市');return;}
+  const btn=$('goTownBtn'); btn.disabled=true; toast('🔎 查詢中…');
+  let label=county+town+vill;
+  let pos=await geocode(label);
+  if(!pos&&vill){
+    label=county+town;
+    pos=await geocode(label);
+    if(pos) toast('找不到「'+vill+'」，改傳送到'+label);
+  }
+  btn.disabled=false; btn.blur();
+  if(!pos){toast('❌ 查不到這個地點');return;}
+  CITIES[label]=pos;
+  $('over').style.display='none'; car.dead=false;
+  teleport(label);
+}
+$('goTownBtn').onclick=goPlace;
+
+// ================= 導航 =================
+let dest=null;   // {x,y,name}
+
+// ================= #2 導航到最近的加油站 =================
+let poiNavIdx = 0, poiNavType = '', lowHpHint = false;
+
+function navToPoi(type){
+  if(!started || car.dead) return;
+  if(mission){ toast('任務進行中，無法改導航'); return; }
+  if(ride.state!=='idle'){ toast('載客中，無法改導航'); return; }
+  const list = pois.filter(p => p.type === type)
+    .map(p => ({p, d: Math.hypot(p.x - car.x, p.y - car.y)}))
+    .sort((a, b) => a.d - b.d);
+  const T = POI_TYPES[type];
+if(!list.length){
+  poiFallback();
+  const again = pois.filter(p => p.type === type);
+  if(!again.length){ toast('附近還沒有' + T.name + '資料,稍後再試'); return; }
+  return navToPoi(type);
+}
+
+  // 連按同一種：換下一近的
+  if(poiNavType === type && dest && dest.poi) poiNavIdx = (poiNavIdx + 1) % Math.min(list.length, 5);
+  else poiNavIdx = 0;
+  poiNavType = type;
+
+  const t = list[poiNavIdx], p = t.p;
+  dest = {x: p.x, y: p.y, name: T.icon + ' ' + p.name, poi: true};
+  $('navHud').style.display = 'block';
+  const d = t.d >= 1000 ? (t.d / 1000).toFixed(1) + ' km' : Math.round(t.d) + ' m';
+  toast('🧭 導航到 ' + T.icon + ' ' + p.name + '（' + d + '）');
+}
+
+// 血量過低時提示一次
+function lowHpHintUpdate(){
+  if(car.hp >= 40){ lowHpHint = false; return; }
+  if(lowHpHint || dest) return;
+  lowHpHint = true;
+  toast('⚠️ 血量偏低！按 G 導航到加油站，Shift+G 到修車廠');
+}
+
+$('fuelNavBtn').onclick = () => { navToPoi('fuel'); $('fuelNavBtn').blur(); };
+
+// ================= 任務模式 =================
+let mission=null;   // {dest,left,total,reward}
+
+function startMission(){
+  if(!started||car.dead) return;
+  if(ride.state!=='idle'){toast('請先完成載客任務');return;}
+  if(mission){toast('已有任務進行中');return;}
+  let pos=null;
+  // 在已載入的道路中，找距離 250~600 公尺的點
+  for(let i=0;i<80&&!pos;i++){
+    const w=pick(ways); if(!w||w.cfg===ROAD.motorway) continue;
+    const p=pointAt(w,rnd(0,w.len));
+    const d=Math.hypot(p.x-car.x,p.y-car.y);
+    if(d>=250&&d<=600) pos={x:p.x,y:p.y,d,name:w.name||w.cfg.name};
+  }
+  if(!pos){toast('附近找不到合適的目的地，再試一次');return;}
+  const total=Math.round(pos.d/9+20);          // 以平均約 32 km/h 估算，再加 20 秒緩衝
+  const reward=Math.round(pos.d*1.5);
+  dest={x:pos.x,y:pos.y,name:'📦 '+pos.name};
+  mission={dest,left:total,total,reward};
+  $('navHud').style.display='block';
+  toast('📦 新任務：'+Math.round(pos.d)+' 公尺內送達，限時 '+total+' 秒');
+}
+
+function missionDone(){
+  stats.missions++;
+  const bonus=Math.round(mission.left*5);
+  const gain=mission.reward+bonus;
+  car.score+=gain; comboHit(0,'📦 任務連擊');
+  sfx&&sfx('bonus');
+  toast('✅ 任務完成 +'+gain+'（含剩餘時間加成 '+bonus+'）');
+  mission=null; dest=null; $('navHud').style.display='none';
+}
+
+function missionUpdate(dt){
+  if(!mission) return;
+  if(dest!==mission.dest){            // 被取消導航或改成別的目的地
+    mission=null; toast('任務取消'); return;
+  }
+  mission.left-=dt;
+  if(mission.left<=0){
+    car.score=Math.max(0,car.score-200);
+    toast('⏰ 任務逾時 -200');
+    mission=null; dest=null; $('navHud').style.display='none';
+  }
+}
+
+$('missionBtn').onclick=()=>{startMission();$('missionBtn').blur();};
+$('rideBtn').onclick=()=>{rideRequest();$('rideBtn').blur();};
+
+// ================= 車輛選擇 =================
+const CARS=[
+  {name:'小型車', color:'#e53935', accel:1.00, vmax:1.00, turn:1.00, grip:1.00, size:1.00},
+  {name:'跑車',   color:'#fdd835', accel:1.45, vmax:1.35, turn:1.10, grip:1.10, size:0.95},
+  {name:'休旅車', color:'#43a047', accel:0.85, vmax:0.95, turn:0.90, grip:1.15, size:1.15},
+  {name:'老爺車', color:'#8d6e63', accel:0.65, vmax:0.75, turn:0.85, grip:0.80, size:1.05},
+];
+let carIdx=+(localStorage.getItem('carIdx')||0);
+if(!(carIdx>=0&&carIdx<CARS.length)) carIdx=0;
+let CAR=CARS[carIdx];
+
+function selectCar(i){
+  carIdx=(i+CARS.length)%CARS.length;
+  CAR=CARS[carIdx];
+  localStorage.setItem('carIdx',carIdx);
+  toast('🚗 '+CAR.name);
+}
+
+
+// ================= 小地圖 =================
+const mini=$('mini'), mctx=mini.getContext('2d');
+const MINI_RANGES=[150,300,600];
+let miniIdx=1;
+
+let miniF=0;
+function miniDraw(){
+  if(miniF++&1) return;          // 每 2 幀畫一次，畫布內容會保留
+  const S=mini.width, R=S/2;
+  mctx.clearRect(0,0,S,S);
+  mctx.save();
+  mctx.beginPath(); mctx.arc(R,R,R,0,7); mctx.clip();
+
+  const range=MINI_RANGES[miniIdx];          // 圓半徑代表的公尺數
+  const k=R/range;                           // 每公尺幾像素
+  // 世界座標 → 小地圖座標(正北朝上，和主畫面一致)
+  const mp=(x,y)=>[R + (x-car.x)*k, R - (y-car.y)*k];
+
+
+  // 道路
+  mctx.lineCap='round';
+  const segs=nearbySegs(car.x,car.y);
+  for(const sg of segs){
+    const [ax,ay]=mp(sg.a.x,sg.a.y), [bx,by]=mp(sg.b.x,sg.b.y);
+    if((ax<-10&&bx<-10)||(ax>S+10&&bx>S+10)||(ay<-10&&by<-10)||(ay>S+10&&by>S+10)) continue;
+    mctx.strokeStyle=sg.w.cfg.color;
+    mctx.lineWidth=Math.max(1.2,Math.min(5,sg.w.half*0.5*k*2));
+    mctx.globalAlpha=.9;
+    mctx.beginPath(); mctx.moveTo(ax,ay); mctx.lineTo(bx,by); mctx.stroke();
+  }
+  mctx.globalAlpha=1;
+
+  // 導航路線
+  if(dest && navRoute && navRoute.length>1){
+    mctx.save();
+    mctx.lineJoin='round'; mctx.lineCap='round';
+    mctx.beginPath();
+    mctx.moveTo(R,R);
+    for(const p of navRoute){ const [x,y]=mp(p.x,p.y); mctx.lineTo(x,y); }
+    mctx.strokeStyle='#000'; mctx.lineWidth=8; mctx.stroke();
+    mctx.strokeStyle='#ff4081'; mctx.lineWidth=5; mctx.stroke();
+    mctx.restore();
+  }
+
+  // AI 車
+  mctx.fillStyle='#b0bec5';
+  for(const n of npcs){
+    const [x,y]=mp(n.x,n.y);
+    if(Math.hypot(x-R,y-R)>R) continue;
+    mctx.fillRect(x-1.5,y-1.5,3,3);
+  }
+
+  // 警車(閃爍紅藍)
+  const fl=Math.floor(performance.now()/200)%2;
+  mctx.fillStyle=fl?'#ff1744':'#2979ff';
+  for(const p of police){
+    const [x,y]=mp(p.x,p.y);
+    const d=Math.hypot(x-R,y-R);
+    let px=x,py=y;
+    if(d>R-6){ px=R+(x-R)/d*(R-6); py=R+(y-R)/d*(R-6); }   // 超出範圍貼在邊緣
+    mctx.beginPath(); mctx.arc(px,py,4.5,0,7); mctx.fill();
+  }
+
+  // 導航目的地
+  if(dest){
+    const [x,y]=mp(dest.x,dest.y);
+    const d=Math.hypot(x-R,y-R);
+    let px=x,py=y;
+    if(d>R-8){ px=R+(x-R)/d*(R-8); py=R+(y-R)/d*(R-8); }
+    mctx.fillStyle='#ffeb3b'; mctx.strokeStyle='#000'; mctx.lineWidth=1.5;
+    mctx.beginPath(); mctx.arc(px,py,5.5,0,7); mctx.fill(); mctx.stroke();
+  }
+
+    // 加油站與修車廠
+  for(const p of pois){
+    const [x,y]=mp(p.x,p.y);
+    const d=Math.hypot(x-R,y-R);
+    if(d>R-5) continue;                         // 超出小地圖範圍就不畫
+    const t=POI_TYPES[p.type];
+    mctx.globalAlpha=p.cd>0?.4:1;               // 冷卻中變淡
+    mctx.fillStyle = p.type==='fuel' ? '#ffb300' : '#2196f3';
+    mctx.strokeStyle='#fff'; mctx.lineWidth=1.5;
+    mctx.beginPath(); mctx.arc(x,y,5,0,7); mctx.fill(); mctx.stroke();
+    mctx.globalAlpha=1;
+  }
+
+
+  // 測速照相(小點)
+  mctx.fillStyle='#ff9800';
+  for(const c of cams){
+    const [x,y]=mp(c.x,c.y);
+    if(Math.hypot(x-R,y-R)>R-3) continue;
+    mctx.fillRect(x-2,y-2,4,4);
+  }
+
+  mctx.restore();
+
+  // 玩家(中心三角形,永遠朝上)
+  mctx.save();
+  mctx.translate(R,R); mctx.rotate(car.heading);
+  mctx.fillStyle='#fff'; mctx.strokeStyle=CAR.color; mctx.lineWidth=2;
+  mctx.beginPath(); mctx.moveTo(0,-9); mctx.lineTo(6,7); mctx.lineTo(0,3); mctx.lineTo(-6,7); mctx.closePath();
+  mctx.fill(); mctx.stroke();
+  mctx.restore();
+
+
+  // 北方標記 N(隨車頭旋轉)
+  const nx=R, ny=10;
+  mctx.fillStyle='#fff'; mctx.font='bold 11px sans-serif';
+  mctx.textAlign='center'; mctx.textBaseline='middle';
+  mctx.fillText('N',nx,ny);
+
+  // 範圍文字
+  mctx.fillStyle='rgba(255,255,255,.8)'; mctx.font='10px sans-serif';
+  mctx.fillText(range+'m',R,S-9);
+}
+
+// ================= 存檔與成就 =================
+const SAVE_KEY='tw_race_save_v1';
+function statsDefault(){
+  return {dist:0,hits:0,tickets:0,fines:0,missions:0,time:0,cars:[],ach:{}};
+}
+function statsLoad(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SAVE_KEY));
+    return Object.assign(statsDefault(),s||{});
+  }catch(e){return statsDefault();}
+}
+let stats=statsLoad();
+function saveStats(){
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify(stats));}catch(e){}
+}
+addEventListener('beforeunload',saveStats);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) saveStats(); });
+
+let runDist=0, lastHits=0, lastTk=0, lastFines=0, maxW=0, escaped=false, saveT=0;
+
+const ACH=[
+  {id:'drive1',   icon:'🛣️', name:'上路了',     desc:'累計行駛 1 公里',        ok:()=>stats.dist>=1000},
+  {id:'drive50',  icon:'🗺️', name:'長途旅人',   desc:'累計行駛 50 公里',       ok:()=>stats.dist>=50000},
+  {id:'speed100', icon:'💨', name:'飆速新手',   desc:'時速達到 100 km/h',      ok:()=>Math.abs(car.speed)*3.6>=100},
+  {id:'speed150', icon:'🚀', name:'極速狂飆',   desc:'時速達到 150 km/h',      ok:()=>Math.abs(car.speed)*3.6>=150},
+  {id:'combo10',  icon:'🔥', name:'連擊高手',   desc:'達成 10 連擊',           ok:()=>combo>=10},
+  {id:'score5000',icon:'🏆', name:'五千大關',   desc:'單場分數達到 5000',      ok:()=>car.score>=5000},
+  {id:'mission1', icon:'📦', name:'初次送貨',   desc:'完成 1 個任務',          ok:()=>stats.missions>=1},
+  {id:'mission10',icon:'🚚', name:'送貨達人',   desc:'累計完成 10 個任務',     ok:()=>stats.missions>=10},
+  {id:'wanted5',  icon:'🚨', name:'全城追緝',   desc:'通緝等級達到 5 星',      ok:()=>wanted>=5},
+  {id:'escape',   icon:'🏃', name:'成功脫逃',   desc:'3 星以上通緝後完全擺脫',  ok:()=>escaped},
+  {id:'tk10',     icon:'🎫', name:'罰單收藏家', desc:'累計收到 10 張罰單',     ok:()=>stats.tickets>=10},
+  {id:'hit10',    icon:'🚑', name:'路怒症',     desc:'累計撞到 10 位行人',     ok:()=>stats.hits>=10},
+  {id:'clean',    icon:'😇', name:'守法良民',   desc:'一場內行駛 2 公里且無罰單、無撞人', ok:()=>runDist>=2000&&car.tickets===0&&car.hits===0},
+  {id:'allcars',  icon:'🚗', name:'車庫收藏',   desc:'每種車都開過一次',       ok:()=>stats.cars.length>=CARS.length},
+];
+
+function achUnlock(a){
+  stats.ach[a.id]=Date.now();
+  saveStats();
+  toast('🏅 成就解鎖:'+a.icon+' '+a.name);
+  sfx&&sfx('bonus');
+}
+
+function achUpdate(dt){
+  const v=Math.abs(car.speed);
+  stats.dist+=v*dt; runDist+=v*dt; stats.time+=dt;
+
+  // 用「差值」累計，重新開始時 car.hits 等歸零也不會出錯
+  if(car.hits<lastHits) lastHits=car.hits;
+  if(car.tickets<lastTk) lastTk=car.tickets;
+  if(car.fines<lastFines) lastFines=car.fines;
+  stats.hits+=car.hits-lastHits;       lastHits=car.hits;
+  stats.tickets+=car.tickets-lastTk;   lastTk=car.tickets;
+  stats.fines+=car.fines-lastFines;    lastFines=car.fines;
+
+  if(!stats.cars.includes(carIdx)) stats.cars.push(carIdx);
+
+  // 脫逃判定：曾達 3 星，之後歸零
+  if(wanted>maxW) maxW=wanted;
+  if(wanted===0){ if(maxW>=3) escaped=true; maxW=0; }
+
+  for(const a of ACH){
+    if(!stats.ach[a.id]&&a.ok()) achUnlock(a);
+  }
+  saveT+=dt;
+  if(saveT>5){saveT=0;saveStats();}
+}
+
+function achShow(){
+  const n=Object.keys(stats.ach).length;
+  const km=(stats.dist/1000).toFixed(1);
+  const hr=Math.floor(stats.time/3600), mn=Math.floor(stats.time%3600/60);
+  $('achSum').innerHTML=
+    '已解鎖 <b>'+n+' / '+ACH.length+'</b><br>'+
+    '累計里程 <b>'+km+'</b> km　遊玩 <b>'+hr+'</b> 時 <b>'+mn+'</b> 分<br>'+
+    '撞人 <b>'+stats.hits+'</b>　罰單 <b>'+stats.tickets+'</b>　罰款 <b>$'+stats.fines+'</b>　任務 <b>'+stats.missions+'</b>';
+  $('achList').innerHTML=ACH.map(a=>{
+    const on=!!stats.ach[a.id];
+    return '<div class="ach'+(on?' on':'')+'"><b>'+(on?a.icon:'🔒')+' '+a.name+'</b><br>'+a.desc+'</div>';
+  }).join('');
+  $('achBox').style.display='flex';
+}
+function achToggle(){
+  $('achBox').style.display==='flex'?$('achBox').style.display='none':achShow();
+}
+$('achBtn').onclick=()=>{achToggle();$('achBtn').blur();};
+$('achClose').onclick=()=>$('achBox').style.display='none';
+$('achReset').onclick=()=>{
+  if(confirm('確定清除所有累計資料與成就？(排行榜與車款不受影響)')){
+    stats=statsDefault(); escaped=false; saveStats(); achShow();
+  }
+};
+
+
+// ================= Combo 連擊 =================
+let combo=0, comboT=0, bestCombo=0;
+const COMBO_TIME=4;
+
+function comboMult(){ return Math.min(5,1+Math.floor(combo/3)*0.5); }   // 每 3 連擊 +0.5,最高 ×5
+
+// 取代原本的 car.score+=n,可享倍率
+function addScore(n,label){
+  const m=comboMult();
+  const g=Math.round(n*m);
+  car.score+=g;
+  return g;
+}
+function comboHit(base,label){
+  combo++; comboT=COMBO_TIME;
+  if(combo>bestCombo) bestCombo=combo;
+  const g=addScore(base);
+  toast(label+' +'+g+(comboMult()>1?'(×'+comboMult()+')':''));
+  if(combo%5===0){ sfx&&sfx('bonus'); toast('🔥 '+combo+' 連擊!'); }
+  comboHudUpdate();
+}
+function comboBreak(){
+  if(combo>=5) toast('💔 連擊中斷(最高 '+combo+')');
+  combo=0; comboT=0; comboHudUpdate();
+}
+function comboUpdate(dt){
+  if(combo>0){
+    comboT-=dt;
+    if(comboT<=0) comboBreak();
+    else $('comboBar').style.width=(comboT/COMBO_TIME*100)+'%';
+  }
+}
+function comboHudUpdate(){
+  const h=$('comboHud');
+  if(combo<=0){h.style.display='none';return;}
+  h.style.display='block';
+  $('comboTxt').textContent='🔥 COMBO ×'+combo+(comboMult()>1?'  (分數×'+comboMult()+')':'');
+}
+
+
+// ================= 天氣與日夜 =================
+let tod=9;                       // 遊戲時間 0~24
+let weather='clear', wxTimer=60, rainAmt=0, fogAmt=0;
+const drops=[];
+const nc=document.createElement('canvas'), nctx=nc.getContext('2d');
+const glowSpr=(()=>{
+  const c=document.createElement('canvas'); c.width=c.height=64;
+  const g=c.getContext('2d'), gr=g.createRadialGradient(32,32,2,32,32,32);
+  gr.addColorStop(0,'rgba(0,0,0,.85)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gr; g.fillRect(0,0,64,64); return c;
+})();
+
+
+function nightness(){            // 0=白天 1=深夜
+  if(tod>=7&&tod<17) return 0;
+  if(tod>=19||tod<5) return 1;
+  if(tod>=17) return (tod-17)/2;
+  return 1-(tod-5)/2;
+}
+function grip(){ return 1-rainAmt*0.3; }   // 下雨時抓地力 70%
+
+function envUpdate(dt){
+  tod=(tod+dt/30)%24;            // 30 秒 = 1 小時
+  wxTimer-=dt;
+  if(wxTimer<=0){
+    wxTimer=rnd(60,120);
+    const r=Math.random();
+    const nw=r<.5?'clear':(r<.8?'rain':'fog');
+    if(nw!==weather){
+      weather=nw;
+      toast(nw==='rain'?'🌧️ 下雨了,路面濕滑':nw==='fog'?'🌫️ 起霧了,視線不佳':'☀️ 天氣放晴');
+    }
+  }
+  rainAmt+=((weather==='rain'?1:0)-rainAmt)*Math.min(1,dt*.5);
+  fogAmt +=((weather==='fog' ?1:0)-fogAmt )*Math.min(1,dt*.5);
+
+  const hh=String(Math.floor(tod)).padStart(2,'0'), mm=String(Math.floor(tod%1*60)).padStart(2,'0');
+  const n=nightness();
+  const ic=n>.6?'🌙':(n>.1?'🌆':'☀️');
+  const wx=weather==='rain'?'🌧️ 雨天':(weather==='fog'?'🌫️ 大霧':'晴天');
+  $('envTxt').textContent=ic+' '+hh+':'+mm+'　'+wx;
+}
+
+function envDraw(sx,sy,ppm){
+  const n=nightness();
+
+  // --- 夜晚:先在離屏畫布塗黑,再挖出光源 ---
+    if(n>0.01){
+    const QW=W>>1, QH=H>>1;                       // 半解析度，省 75% 像素
+    if(nc.width!==QW||nc.height!==QH){nc.width=QW;nc.height=QH;}
+    nctx.setTransform(.5,0,0,.5,0,0);
+    nctx.globalCompositeOperation='source-over';
+    nctx.clearRect(0,0,W,H);
+    nctx.fillStyle='rgba(5,10,30,'+(0.8*n)+')';
+    nctx.fillRect(0,0,W,H);
+    nctx.globalCompositeOperation='destination-out';
+
+    // 玩家車頭燈(錐形光束)
+    const L=Math.max(280,90*ppm);
+    nctx.save(); nctx.translate(W/2,H/2); nctx.rotate(car.heading);
+    const g=nctx.createLinearGradient(0,-10,0,-L);
+    g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    nctx.fillStyle=g;
+    nctx.beginPath(); nctx.moveTo(-10,-10); nctx.lineTo(-L*.45,-L); nctx.lineTo(L*.45,-L); nctx.lineTo(10,-10); nctx.closePath(); nctx.fill();
+    nctx.drawImage(glowSpr,-70,-70,140,140);      // 車身周圍小亮圈
+    nctx.restore();
+
+    // 其他光源：用預先畫好的光暈，不再每盞建立漸層
+    const glow=(x,y,r)=>{
+      if(x<-r||x>W+r||y<-r||y>H+r) return;
+      nctx.drawImage(glowSpr,x-r,y-r,r*2,r*2);
+    };
+    for(const j of lights) glow(sx(j.x),sy(j.y),60);
+    for(const c of npcs)   glow(sx(c.x),sy(c.y),32);
+    for(const p of police) glow(sx(p.x),sy(p.y),55);
+
+    ctx.drawImage(nc,0,0,W,H);
+  }
+
+
+  // --- 霧 ---
+  if(fogAmt>0.02){
+    const g=ctx.createRadialGradient(W/2,H/2,90,W/2,H/2,Math.max(W,H)*.55);
+    g.addColorStop(0,'rgba(215,222,228,0)');
+    g.addColorStop(1,'rgba(215,222,228,'+(0.88*fogAmt)+')');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='rgba(215,222,228,'+(0.15*fogAmt)+')'; ctx.fillRect(0,0,W,H);
+  }
+
+  // --- 雨 ---
+  if(rainAmt>0.02){
+    ctx.fillStyle='rgba(40,55,80,'+(0.18*rainAmt)+')'; ctx.fillRect(0,0,W,H);
+    while(drops.length<240) drops.push({x:Math.random()*W,y:Math.random()*H,v:14+Math.random()*10});
+    const cnt=Math.floor(240*rainAmt);
+    ctx.strokeStyle='rgba(190,215,255,.6)'; ctx.lineWidth=1.2;
+    ctx.beginPath();
+    for(let i=0;i<cnt;i++){
+      const d=drops[i];
+      ctx.moveTo(d.x,d.y); ctx.lineTo(d.x-3,d.y+14);
+      d.y+=d.v; d.x-=1.5;
+      if(d.y>H||d.x<0){d.y=-10;d.x=Math.random()*(W+40);}
+    }
+    ctx.stroke();
+  }
+}
+
+async function goNav(){
+  const county=countySel.value, town=townSel.value;
+  const vill=$('villInput').value.trim();
+  if(!county){toast('請先選擇縣市');return;}
+  const btn=$('navBtn'); btn.disabled=true; toast('🔎 查詢目的地…');
+  let label=county+town+vill;
+  let pos=await geocode(label);
+  if(!pos&&vill){
+    label=county+town;
+    pos=await geocode(label);
+    if(pos) toast('找不到「'+vill+'」，改導航到'+label);
+  }
+  btn.disabled=false; btn.blur();
+  if(!pos){toast('❌ 查不到這個地點');return;}
+  const p=toXY(pos[0],pos[1]);
+  dest={x:p.x,y:p.y,name:label};
+  $('navHud').style.display='block';
+  toast('🧭 導航開始：'+label);
+}
+$('navBtn').onclick=goNav;
+$('navCancel').onclick=()=>{dest=null;$('navHud').style.display='none';$('navCancel').blur();toast('已取消導航');};
+
+// ================= 導航路線（沿道路）=================
+let navRoute = null, navRouteT = 0, navRouteDest = null, navAng = null;
+let gMap = null, gN = -1;
+const gKey = p => Math.round(p.x * 2) + ',' + Math.round(p.y * 2);
+
+function navGraph(){
+  if(gMap && gN === ways.length) return gMap;
+  gMap = new Map(); gN = ways.length;
+  for(const w of ways){
+    let prev = null;
+    for(const p of w.pts){
+      const k = gKey(p);
+      let n = gMap.get(k);
+      if(!n){ n = {x: p.x, y: p.y, adj: []}; gMap.set(k, n); }
+      if(prev && prev !== n){
+        const c = Math.hypot(n.x - prev.x, n.y - prev.y);
+        prev.adj.push([n, c]); n.adj.push([prev, c]);
+      }
+      prev = n;
+    }
+  }
+  return gMap;
+}
+
+let navGoal = null;
+
+function navFindRoute(){
+  const g = navGraph(); if(!g.size || !dest) return null;
+
+  // 起點：最近路段的兩個端點一起當起點，由 A* 自己選最佳，不會左右跳
+  const starts = [];
+  const info = nearestRoad(car.x, car.y);
+  if(info){
+    for(const p of [info.seg.a, info.seg.b]){
+      const n = g.get(gKey(p));
+      if(n) starts.push([n, Math.hypot(n.x - car.x, n.y - car.y)]);
+    }
+  }
+  if(!starts.length){            // 開在路外很遠：找全圖最近的節點
+    let bn = null, bd = 1e12;
+    for(const n of g.values()){
+      const d = Math.hypot(n.x - car.x, n.y - car.y);
+      if(d < bd){ bd = d; bn = n; }
+    }
+    if(bn) starts.push([bn, bd]);
+  }
+  if(!starts.length) return null;
+
+  // 終點：離目的地最近的節點，加入遲滯避免來回換
+  let goal = null, gd = 1e12;
+  for(const n of g.values()){
+    const d = Math.abs(n.x - dest.x) + Math.abs(n.y - dest.y);
+    if(d < gd){ gd = d; goal = n; }
+  }
+  if(!goal) return null;
+  if(navGoal && navGoal.dest === dest){
+    const old = g.get(navGoal.key);
+    if(old && Math.abs(old.x - dest.x) + Math.abs(old.y - dest.y) <= gd + 30) goal = old;
+  }
+  navGoal = {dest, key: gKey(goal)};
+
+  const h = n => Math.hypot(n.x - goal.x, n.y - goal.y);
+  const gs = new Map(), from = new Map(), closed = new Set();
+  const heap = [];
+  const push = it => {
+    heap.push(it); let i = heap.length - 1;
+    while(i > 0){ const p = (i - 1) >> 1; if(heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop();
+    if(heap.length){
+      heap[0] = last; let i = 0;
+      for(;;){
+        let l = 2 * i + 1, r = l + 1, m = i;
+        if(l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if(r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if(m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+      }
+    }
+    return top;
+  };
+  for(const [n, c] of starts){
+    if(c < (gs.get(n) ?? 1e12)){ gs.set(n, c); push([c + h(n), n]); }
+  }
+
+  let best = starts[0][0], bh = h(best), cnt = 0;
+  while(heap.length && cnt++ < 60000){
+    const n = pop()[1];
+    if(closed.has(n)) continue;
+    closed.add(n);
+    const hn = h(n); if(hn < bh){ bh = hn; best = n; }
+    if(n === goal){ best = n; break; }
+    const gn = gs.get(n);
+    for(const [m, c] of n.adj){
+      const ng = gn + c;
+      if(ng < (gs.get(m) ?? 1e12)){ gs.set(m, ng); from.set(m, n); push([ng + h(m), m]); }
+    }
+  }
+  const pts = [];
+  for(let n = best; n; n = from.get(n)) pts.push({x: n.x, y: n.y});
+  pts.reverse();
+  return pts;
+}
+
+function navRouteTick(){
+  // 換目的地：立刻清掉舊路線
+  if(navRouteDest !== dest){
+    navRoute = null; navGoal = null; navRouteDest = dest; navRouteT = 0;
+  }
+  const now = performance.now();
+  if(now - navRouteT > 1500){
+    navRouteT = now;
+    try{
+      const r = navFindRoute();
+      if(r && r.length) navRoute = r;
+    }catch(e){ console.error('路線錯誤', e); }
+  }
+  // 丟掉已經走過的點
+  if(navRoute){
+    while(navRoute.length > 1 &&
+      Math.hypot(navRoute[1].x - car.x, navRoute[1].y - car.y) <
+      Math.hypot(navRoute[0].x - car.x, navRoute[0].y - car.y)) navRoute.shift();
+  }
+}
+
+
+function navTarget(){
+  if(navRoute && navRoute.length){
+    // 從車子位置出發，沿著路線累計走 35 公尺，取該位置
+    let px = car.x, py = car.y, acc = 0;
+    const LOOK = 35;
+    for(const p of navRoute){
+      const seg = Math.hypot(p.x - px, p.y - py);
+      if(seg > 0.01 && acc + seg >= LOOK){
+        const t = (LOOK - acc) / seg;
+        return {x: px + (p.x - px) * t, y: py + (p.y - py) * t};
+      }
+      acc += seg; px = p.x; py = p.y;
+    }
+    // 路線不到 35 公尺：指向路線終點或目的地
+    const L = navRoute[navRoute.length - 1];
+    if(Math.hypot(L.x - dest.x, L.y - dest.y) > 40 && Math.hypot(L.x - car.x, L.y - car.y) > 10) return L;
+  }
+  return dest;
+}
+
+
+
+function navUpdate(){
+if(!dest){ navRoute = null; navRouteDest = null; navAng = null; return; }
+  const dx=dest.x-car.x, dy=dest.y-car.y, dist=Math.hypot(dx,dy);
+    if(dist<25 && !dest.ride){
+    if(mission){missionDone();return;}
+    if(dest.poi){
+      toast('🏁 已抵達 '+dest.name+'，停車 3 秒即可補血');
+    }else{
+      car.score+=500; sfx&&sfx('bonus');
+      toast('🏁 抵達 '+dest.name+' +500');
+    }
+    dest=null; $('navHud').style.display='none'; return;
+  }
+  // 箭頭：車頭朝上，旋轉到目的地方位
+navRouteTick();
+const tg = navTarget();
+const want = Math.atan2(tg.x - car.x, tg.y - car.y);   // 正北朝上，和主畫面一致
+if(navAng === null) navAng = want;
+navAng += angDiff(want, navAng) * 0.2;      // 平滑，不會一直甩
+const rel = navAng;
+  const c=$('navArrow').getContext('2d');
+  c.clearRect(0,0,64,64);
+  c.save(); c.translate(32,32); c.rotate(rel);
+  c.fillStyle='#ffeb3b'; c.strokeStyle='#000'; c.lineWidth=2;
+  c.beginPath(); c.moveTo(0,-26); c.lineTo(17,16); c.lineTo(0,8); c.lineTo(-17,16); c.closePath();
+  c.fill(); c.stroke(); c.restore();
+  const d=dist>=1000?(dist/1000).toFixed(1)+' km':Math.round(dist)+' m';
+  const eta=Math.ceil(dist/(40/3.6)/60);   // 以均速 40 km/h 估算
+  $('navTxt').innerHTML='📍 '+dest.name+'<br>'+d+'　約 '+eta+' 分'+
+    (mission?'<br>⏱ <b style="color:'+(mission.left<15?'#ff5252':'#fff')+'">'+Math.ceil(mission.left)+' 秒</b>　獎勵 $'+mission.reward:'');
+}
+
+// ================= 警車追逐 =================
+let wanted=0, wantedTimer=0, escapeTimer=0, bustTimer=0;
+const police=[];
+
+function addWanted(n,reason){
+  const old=wanted;
+  wanted=Math.min(5,wanted+(n||1));
+  wantedTimer=0;
+  if(wanted>old) toast('🚨 通緝 '+'★'.repeat(wanted)+(reason?'（'+reason+'）':''));
+  wantedHud();
+}
+
+function wantedHud(){
+  const h=$('wantedHud');
+  if(wanted<=0){h.style.display='none';return;}
+  h.style.display='block';
+  h.innerHTML='<span style="color:#ffd600;text-shadow:0 0 4px #000">'+'★'.repeat(wanted)+'</span><span style="color:#777">'+'★'.repeat(5-wanted)+'</span>';
+}
+
+function spawnPolice(){
+  const a=car.heading+Math.PI+(Math.random()-0.5)*1.2;   // 出現在車後方
+  const d=150+Math.random()*50;
+  police.push({x:car.x+Math.sin(a)*d, y:car.y+Math.cos(a)*d, heading:a+Math.PI, speed:0});
+}
+
+function policeUpdate(dt){
+  // 星等隨時間自然下降（約 30 秒無犯規降 1 級）
+  if(wanted>0){
+    wantedTimer+=dt;
+    if(wantedTimer>30){wanted--;wantedTimer=0;wantedHud();if(!wanted)toast('✅ 通緝解除');}
+  }
+  // 補足警車數量
+  const want=wanted>0?Math.min(3,Math.ceil(wanted/2)):0;
+  while(police.length<want) spawnPolice();
+  while(police.length>want) police.pop();
+  if(!police.length){bustTimer=0;escapeTimer=0;return;}
+
+  const playerSpeed=Math.abs(car.speed||0);                 // ← 若你的車速變數不是 car.speed，改這裡（單位：公尺/秒）
+  const maxSp=Math.max(14,Math.min(34,playerSpeed*1.05))+wanted*1.5;
+  let nearest=1e9;
+  for(const p of police){
+    const dx=car.x-p.x, dy=car.y-p.y, dist=Math.hypot(dx,dy);
+    nearest=Math.min(nearest,dist);
+    // 轉向：每秒最多轉約 2.5 rad
+    let diff=Math.atan2(dx,dy)-p.heading;
+    diff=Math.atan2(Math.sin(diff),Math.cos(diff));
+    p.heading+=Math.max(-2.5*dt,Math.min(2.5*dt,diff));
+    // 加速、貼近時減速避免穿過去
+    const target=dist<8?Math.min(maxSp,playerSpeed):maxSp;
+    p.speed+=(target-p.speed)*Math.min(1,dt*1.5);
+    p.x+=Math.sin(p.heading)*p.speed*dt;
+    p.y+=Math.cos(p.heading)*p.speed*dt;
+    // 太遠就拉回到後方（避免被甩掉後永遠不來）
+    if(dist>450){
+      const a=car.heading+Math.PI+(Math.random()-0.5);
+      p.x=car.x+Math.sin(a)*200; p.y=car.y+Math.cos(a)*200; p.speed=0;
+    }
+  }
+  // 逮捕判定
+  if(nearest<7){
+    bustTimer+=dt;
+    if(bustTimer>1.5){
+      car.score=Math.max(0,car.score-1000);
+      toast('🚔 被逮捕！罰款 1000 分');
+      sfx&&sfx('crash');
+      wanted=0; police.length=0; bustTimer=0; escapeTimer=0; comboBreak();
+      car.speed=0;
+      wantedHud();
+      return;
+    }
+  }else bustTimer=Math.max(0,bustTimer-dt);
+  // 甩掉判定
+  if(nearest>300){
+    escapeTimer+=dt;
+    if(escapeTimer>8){
+      escapeTimer=0; wanted--; wantedTimer=0; wantedHud();
+      toast(wanted?'🏃 甩開一些警車 ★'+wanted:'✅ 成功脫逃！');
+      if(wanted<=0) police.length=0;
+    }
+  }else escapeTimer=0;
+}
+
+function policeDraw(sx,sy,ppm){
+  const flash=Math.floor(performance.now()/180)%2;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const p of police){
+    const x=sx(p.x), y=sy(p.y);
+    ctx.fillStyle=flash?'rgba(255,0,0,.35)':'rgba(0,80,255,.35)';
+    ctx.beginPath(); ctx.arc(x,y,22,0,Math.PI*2); ctx.fill();
+    ctx.font='28px sans-serif'; ctx.fillText('🚓',x,y);
+  }
+}
+
+
+
+// 在輸入框打字時，不要觸發遊戲按鍵（W/A/S/D/R/M/H…）
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'){
+    e.stopPropagation();
+    if(e.key==='Enter') goPlace();
+  }
+},true);
+addEventListener('keyup',e=>{ if(e.target.tagName==='INPUT') e.stopPropagation(); },true);
+
+
+// ================= 第 5-1 段：排行榜 =================
+const LB_KEY='tw_race_board_v1';
+function lbLoad(){
+  try{return JSON.parse(localStorage.getItem(LB_KEY))||[];}catch(e){return [];}
+}
+function lbSave(list){
+  try{localStorage.setItem(LB_KEY,JSON.stringify(list));}catch(e){}
+}
+function lbBest(){
+  const l=lbLoad(); return l.length?l[0].score:0;
+}
+// 回傳排名（從 0 開始），不在前 10 則回傳 -1
+function lbAdd(rec){
+  const list=lbLoad();
+  list.push(rec);
+  list.sort((a,b)=>b.score-a.score);
+  const rank=list.indexOf(rec);
+  const top=list.slice(0,10);
+  lbSave(top);
+  return rank<10?rank:-1;
+}
+function lbShow(highlight){
+  const list=lbLoad();
+  let h='<tr><th>名次</th><th>分數</th><th>撞人</th><th>罰單</th><th>罰款</th><th>地點</th><th>日期</th></tr>';
+  if(!list.length) h+='<tr><td colspan="7">還沒有紀錄，快去開車吧！</td></tr>';
+  list.forEach((r,i)=>{
+    const medal=['🥇','🥈','🥉'][i]||(i+1);
+    h+='<tr'+(i===highlight?' class="me"':'')+'><td>'+medal+'</td><td>'+r.score+'</td><td>'+r.hits+
+       '</td><td>'+r.tickets+'</td><td>$'+r.fines+'</td><td>'+r.place+'</td><td>'+r.date+'</td></tr>';
+  });
+  $('boardTb').innerHTML=h;
+  $('board').style.display='flex';
+}
+function lbSubmit(){
+  const score=Math.floor(car.score);
+  if(score<=0) return;
+  const prevBest=lbBest();
+  const d=new Date();
+  const rec={score,hits:car.hits,tickets:car.tickets,fines:car.fines,place:curCity,
+    date:(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+  const rank=lbAdd(rec);
+  lastRank=rank;
+  $('newRec').style.display=(score>prevBest)?'block':'none';
+  $('bestScore').textContent=lbBest();
+}
+let lastRank=-1;
+$('boardBtn').onclick=()=>{lbShow(-1);$('boardBtn').blur();};
+$('overBoard').onclick=()=>lbShow(lastRank);
+$('boardClose').onclick=()=>$('board').style.display='none';
+$('boardClear').onclick=()=>{
+  if(confirm('確定清除所有紀錄？')){lbSave([]);lbShow(-1);$('bestScore').textContent=0;}
+};
+$('bestScore').textContent=lbBest();
+
+// ================= 第 5-3 段：音效 =================
+var sfx=null;
+let AC=null, master=null, eng=null, engGain=null, muted=false;
+let engMute=0;   // 撞擊後引擎暫時靜音的秒數
+function audioInit(){
+  if(AC) { if(AC.state==='suspended') AC.resume(); return; }
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=muted?0:.5; master.connect(AC.destination);
+    // 引擎：鋸齒波 + 低通濾波
+    eng=AC.createOscillator(); eng.type='sawtooth'; eng.frequency.value=50;
+    const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=400;
+    engGain=AC.createGain(); engGain.gain.value=0;
+    eng.connect(lp); lp.connect(engGain); engGain.connect(master);
+    eng.start();
+  }catch(e){AC=null;}
+}
+function tone(f1,f2,dur,type,vol){
+  if(!AC||muted) return;
+  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||'square';
+  o.frequency.setValueAtTime(f1,t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1,f2),t+dur);
+  g.gain.setValueAtTime(vol||.3,t);
+  g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur);
+}
+function noise(dur,vol,freq){
+  if(!AC||muted) return;
+  const t=AC.currentTime, n=Math.floor(AC.sampleRate*dur);
+  const buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  const s=AC.createBufferSource(); s.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=freq||1500;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(vol||.5,t);
+  g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t);
+}
+// 重擊聲：正弦波快速下滑 = 鼓聲「碰」
+function thump(f1,f2,dur,vol){
+  if(!AC||muted) return;
+  const t=AC.currentTime, o=AC.createOscillator(), g=AC.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(f1,t);
+  o.frequency.exponentialRampToValueAtTime(f2,t+dur*.6);
+  g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+dur);
+}
+
+sfx=function(name){
+  switch(name){
+    case 'crash': thump(180,40,.2,1); noise(.1,1,2500); break;
+    case 'hit':   thump(160,45,.16,1); noise(.07,.9,2000); break;
+    case 'shutter':noise(.06,.6,6000); setTimeout(()=>noise(.08,.5,4000),70); break;
+    case 'ticket':tone(880,880,.12,'square',.25); setTimeout(()=>tone(660,660,.2,'square',.25),140); break;
+    case 'horn':  tone(420,420,.35,'sawtooth',.3); tone(530,530,.35,'sawtooth',.25); break;
+    case 'slip':  noise(.8,.4,3000); tone(900,300,.7,'sawtooth',.12); break;
+    case 'bonus': tone(660,660,.08,'sine',.3); setTimeout(()=>tone(990,990,.12,'sine',.3),80); break;
+  }
+};
+function engineUpdate(dt){
+  if(!AC||!eng) return;
+  if(engMute>0) engMute-=dt||.016;
+  const v=Math.abs(car.speed);
+  const on=!muted&&!car.dead&&engMute<=0&&car.fuel>0;
+  const dl = damageLevel();
+  const wob = dl > .4 ? (Math.random() - .5) * 18 * dl : 0;     // 受損時音調抖動
+  eng.frequency.setTargetAtTime(45 + v*3.2 + wob, AC.currentTime, .05);
+  engGain.gain.setTargetAtTime(on?(.06+Math.min(.14,v*.005)):0,AC.currentTime,on?.15:.01);
+}
+
+function setMute(m){
+  muted=m;
+  if(master) master.gain.value=m?0:.5;
+  toast(m?'🔇 靜音':'🔊 音效開啟');
+}
+addEventListener('keydown',e=>{
+  audioInit();
+  const k=e.key.toLowerCase();
+  if(k==='m') setMute(!muted);
+  if(k==='h') sfx('horn');
+});
+addEventListener('pointerdown',audioInit);
+
+
+
+// ================= 第 5-2 段：路面障礙物 =================
+const obstacles=[];
+const OB={
+  cone:{emoji:'🚧',r:1.6,dmg:3,slow:.75,label:'撞到施工錐'},
+  pothole:{emoji:'🕳️',r:1.8,dmg:5,slow:.6,label:'撞到坑洞'},
+  parked:{emoji:'🚗',r:2.6,dmg:10,slow:.4,label:'撞到違停車'},
+  oil:{emoji:'🛢️',r:2.4,dmg:0,slow:1,label:'輾到油漬！失去抓地力'}
+};
+function rand01(seed){return Math.abs(Math.sin(seed*91.345)*43758.5453)%1;}
+function maybeObstacles(w){
+  if(w.len<80) return;
+  if(w.cfg===ROAD.motorway||w.cfg===ROAD.motorway_link) return;
+  const cnt=Math.min(3,Math.floor(w.len/120));
+  for(let i=0;i<cnt;i++){
+    const r1=rand01(w.id+i*7.1), r2=rand01(w.id+i*13.7), r3=rand01(w.id+i*3.3);
+    if(r1>0.45) continue;
+    const s=15+(w.len-30)*r2;                      // 避開兩端路口
+    const p=pointAt(w,s);
+    const kind=r3<.35?'cone':r3<.65?'pothole':r3<.85?'parked':'oil';
+    // parked 靠路邊，其餘在車道內
+    const side=rand01(w.id+i*5.5)<.5?-1:1;
+    const off=kind==='parked'?side*(w.half-1.3):side*rand01(w.id+i*9.9)*w.half*.7;
+    obstacles.push({kind,x:p.x+p.ty*off,y:p.y-p.tx*off,ang:Math.atan2(p.tx,p.ty),
+      w,hit:false,cd:0,fly:0,hue:Math.floor(rand01(w.id+i)*360)});
+  }
+}
+let slipT=0;
+function obstacleUpdate(dt){
+  if(slipT>0) slipT-=dt;
+  for(const o of obstacles){
+    if(o.cd>0) o.cd-=dt;
+    if(o.fly>0) o.fly-=dt;
+    const dx=o.x-car.x, dy=o.y-car.y;
+    if(dx>60||dx<-60||dy>60||dy<-60) continue;   // 快速排除遠處，不用開根號
+    const d=Math.hypot(dx,dy);
+    const def=OB[o.kind];
+    if(o.kind==='cone'&&o.hit) continue;           // 已被撞飛
+    if(d<def.r+1.2&&o.cd<=0){
+      if(Math.abs(car.speed)<0.5) continue;
+      o.cd=2;
+      if(o.kind==='oil'){
+        slipT=1.5; toast('🛢️ '+def.label); sfx&&sfx('slip');
+      }else{
+        damage(def.dmg); car.speed*=def.slow; comboBreak();
+        toast('💥 '+def.label+' -'+def.dmg);
+        car.score=Math.max(0,car.score-30);
+        if(o.kind==='cone'){o.hit=true;o.fly=.6;}
+        if(o.kind==='pothole') car.heading+=(Math.random()-.5)*.25;
+      }
+    }else if(d<def.r+3.2&&d>=def.r+1.2&&Math.abs(car.speed)>11&&!o.near&&o.kind!=='oil'){
+      o.near=true; comboHit(20,'✨ 閃過障礙');
+       sfx&&sfx('bonus');
+    }else if(d>10) o.near=false;
+  }
+}
+
+
+// ================= 第 4 段 =================
+// ---------- 路口號誌 ----------
+const lights=[], nodeMap=new Map();
+function touchNode(pt,w,inc){
+  const key=Math.round(pt.x/3)+','+Math.round(pt.y/3);
+  let n=nodeMap.get(key);
+  if(!n){n={x:pt.x,y:pt.y,deg:0,major:0,lit:false,cd:0,ws:new Set()};nodeMap.set(key,n);}
+  n.deg+=inc; n.ws.add(w.id);
+  if(w.cfg===ROAD.primary||w.cfg===ROAD.secondary) n.major++;
+  if(!n.lit&&n.deg>=3&&n.ws.size>=2&&n.major>=1){
+    for(const l of lights) if(Math.hypot(l.x-n.x,l.y-n.y)<40) return;  // 40 公尺內只留一個
+    n.lit=true; lights.push(n);
+  }
+}
+
+function redLightUpdate(dt){
+  const ns=Math.abs(Math.cos(car.heading))>Math.abs(Math.sin(car.heading));
+  for(const j of lights){
+    j.cd-=dt;
+    if(Math.abs(j.x-car.x)>20||Math.abs(j.y-car.y)>20) continue;
+    if(j.cd>0) continue;
+    if(Math.hypot(j.x-car.x,j.y-car.y)<7&&car.speed>3&&lightState(ns)==='red'){
+      j.cd=10;
+      const fine=3600;
+      car.tickets++; car.fines+=fine;
+      addWanted(1,'闖紅燈'); comboBreak();
+      car.score=Math.max(0,car.score-Math.round(fine/5));
+      sfx('shutter'); setTimeout(()=>sfx('ticket'),350);
+      const f=$('flash'); f.style.background='#fff'; f.style.opacity=.85;
+      setTimeout(()=>{f.style.opacity=0;f.style.background='#f00';},180);
+      const t=$('ticket');
+      t.innerHTML='<h2>🎫 闖紅燈罰單</h2>你的時速 <b>'+Math.round(car.speed*3.6)+
+        '</b> km/h<br><span class="amt">罰款 $'+fine+'</span><br><small>扣分 '+Math.round(fine/5)+'</small>';
+      t.style.display='block';
+      clearTimeout(issueTicket.tm);
+      issueTicket.tm=setTimeout(()=>t.style.display='none',3200);
+    }
+  }
+}
+
+
+// ---------- 測速照相 ----------
+const cams=[];
+function maybeCam(w){
+  if(w.len<150) return;
+  if(w.cfg.name.indexOf('匝道')>=0) return;
+  const h1=Math.abs(Math.sin(w.id*12.9898)*43758.5453)%1;
+  const h2=Math.abs(Math.sin(w.id*78.233)*12345.6789)%1;
+  if(h1>0.22) return;                         // 約 22% 的道路有照相
+  const p=pointAt(w,w.len*(0.35+0.3*h2));
+  cams.push({x:p.x,y:p.y,tx:p.tx,ty:p.ty,w,limit:w.limit,cd:0,flash:0});
+}
+function fineOf(over){
+  return over<=20?900:over<=40?1800:over<=60?3600:6000;
+}
+function issueTicket(c,kmh,over){
+  const fine=fineOf(over);
+  car.tickets++; car.fines+=fine;
+  addWanted(over>30?2:1,'超速'); comboBreak();
+  car.score=Math.max(0,car.score-Math.round(fine/5));
+  sfx('shutter'); setTimeout(()=>sfx('ticket'),350);
+  const f=$('flash'); f.style.background='#fff'; f.style.opacity=.85;
+  setTimeout(()=>{f.style.opacity=0;f.style.background='#f00';},180);
+  const t=$('ticket');
+  t.innerHTML='<h2>🎫 超速罰單</h2>'+
+    '限速 <b>'+c.limit+'</b> km/h　你的時速 <b>'+Math.round(kmh)+'</b> km/h<br>'+
+    '超速 '+Math.round(over)+' km/h<br><span class="amt">罰款 $'+fine+'</span>'+
+    '<br><small>扣分 '+Math.round(fine/5)+'</small>';
+  t.style.display='block';
+  clearTimeout(issueTicket.tm);
+  issueTicket.tm=setTimeout(()=>t.style.display='none',3200);
+}
+function camUpdate(dt){
+  const kmh=Math.abs(car.speed)*3.6;
+  const hx=Math.sin(car.heading), hy=Math.cos(car.heading);
+  let near=null, nd=1e9;
+  for(const c of cams){
+    c.cd-=dt; if(c.flash>0) c.flash-=dt;
+    const dx=c.x-car.x, dy=c.y-car.y, d=Math.hypot(dx,dy);
+    if(d>200) continue;
+    const ahead=dx*hx+dy*hy;
+    if(ahead>0&&d<150&&d<nd&&car.speed>0){nd=d;near=c;}
+    if(d<9&&c.cd<=0&&car.speed>1){
+      c.cd=25; c.flash=.3;
+      const over=kmh-c.limit;
+      if(over>10) issueTicket(c,kmh,over);
+      else if(over>0) toast('📷 超速但未達舉發標準');
+      else {comboHit(20,'📷 守法通過');}
+    }
+  }
+  const cw=$('camWarn');
+  if(near){
+    const over=kmh>near.limit+10;
+    cw.textContent='📷 前方測速 限速 '+near.limit+'　'+Math.round(nd)+' m'+(over?'　⚠️ 請減速！':'');
+    cw.className=over?'over':''; cw.style.display='block';
+  }else cw.style.display='none';
+}
+
+
+const keys={}; let overlayOn=true, snapped=false, curCity="台北 101";
+const VIS=1.8; // 視覺放大倍率，讓車子在地圖上看得見
+
+function toast(t){
+  const d=document.createElement('div'); d.className='toast'; d.textContent=t;
+  $('toasts').appendChild(d); setTimeout(()=>d.remove(),1800);
+}
+function damage(n){
+  if(ride.state==='riding') ride.hits++;
+  sfx&&sfx('hit');
+  engMute=.35;
+  car.hp=Math.max(0,car.hp-n);
+  const f=$('flash'); f.style.opacity=.5; setTimeout(()=>f.style.opacity=0,150);
+  if(car.hp<=0&&!car.dead){
+    car.dead=true; car.speed=0;
+$('overTxt').textContent='分數 '+Math.floor(car.score)+'　撞人 '+car.hits+' 次　罰單 '+car.tickets+' 張（$'+car.fines+'）';
+    lbSubmit();
+    $('over').style.display='flex';
+  }
+}
+function teleport(name){
+  curCity=name;
+  const c=CITIES[name], p=toXY(c[0],c[1]);
+  car.x=p.x; car.y=p.y; car.heading=0; car.speed=0;
+  npcs.length=0; cams.forEach(c=>c.cd=0);  obstacles.forEach(o=>{o.hit=false;o.cd=0;o.fly=0;});
+  slipT=0;
+  mission=null; dest=null; $('navHud').style.display='none';  rideCancel();
+  park=null; $('parkHud').style.display='none';
+  poiLastX=NaN; poiRetryAt=0; removeFakePois(); poiSeeded=false;
+  peds.length=0; snapped=false; started=false;
+  map.setView(toLL(car.x,car.y),zoom,{animate:false});
+    loadStart=performance.now();
+  $('loading').style.display='flex';
+  $('loadBar').style.width='0';
+  ensureLoaded();
+}
+function restart(){
+  wanted=0; police.length=0;  tod=9; weather='clear'; wxTimer=60; wantedTimer=0; escapeTimer=0; bustTimer=0; wantedHud();
+  combo=0; comboT=0; bestCombo=0; comboHudUpdate();
+  car.hp=100; car.fuel=100; fuelWarn=0; smoke.length=0; park=null; $('parkHud').style.display='none'; $('newRec').style.display='none';
+  runDist=0; escaped=false;
+  car.tickets=0; car.fines=0; cams.forEach(c=>c.cd=0);  lights.forEach(l=>l.cd=0);
+  car.score=0;dest=null; $('navHud').style.display='none'; car.hits=0; car.dead=false;
+  $('over').style.display='none';
+  teleport(curCity);
+}
+
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase(); keys[k]=true;
+  if(k===' '||k.startsWith('arrow')) e.preventDefault();
+  if(k==='q') zoom=Math.max(16,zoom-1);
+  if(k==='e') zoom=Math.min(20,zoom+1);
+  if(k==='r') restart();
+  if(k==='n') startMission();
+  if(k==='j') rideRequest();
+  if(k==='g') navToPoi(e.shiftKey ? 'repair' : 'fuel');
+  if(k==='p' && !e.repeat) parkStart();
+  if(k==='c') selectCar(carIdx+1);
+  if(k==='k') achToggle();
+  if(k==='f'){ fpsOn=!fpsOn; fpsEl.style.display=fpsOn?'block':'none'; }
+  if(k==='i') introShow();
+  if(k===',') sigSet(-1);
+  if(k==='.') sigSet(1);
+  if(k==='/'){ e.preventDefault(); sigSet(2); }
+  if(k==='z'){ miniIdx=(miniIdx+1)%MINI_RANGES.length; toast('🗺️ 小地圖 '+MINI_RANGES[miniIdx]+' 公尺'); }
+  if(k==='t') overlayOn=!overlayOn;
+  if(k==='l'){ $('board').style.display==='flex'?$('board').style.display='none':lbShow(-1); }
+
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+$('goBtn').onclick=()=>{$('over').style.display='none';car.dead=false;teleport(sel.value);$('goBtn').blur();};
+$('again').onclick=restart;
+
+// ---------- 吸附到最近道路（載入完成後做一次） ----------
+function snapToRoad(){
+  // 先找附近約 250 公尺內最近的路段
+  let best=null, bd=1e9;
+  for(const sg of nearbySegs(car.x,car.y)){
+    const dx=sg.b.x-sg.a.x, dy=sg.b.y-sg.a.y, l2=dx*dx+dy*dy||1;
+    let t=((car.x-sg.a.x)*dx+(car.y-sg.a.y)*dy)/l2; t=Math.max(0,Math.min(1,t));
+    const d=Math.hypot(sg.a.x+dx*t-car.x,sg.a.y+dy*t-car.y);
+    if(d<bd){bd=d;best={sg,t};}
+  }
+  if(!best){ snapped=true; return; }       // 附近完全沒路：直接放行，人在路外
+  const sg=best.sg, dx=sg.b.x-sg.a.x, dy=sg.b.y-sg.a.y;
+  car.x=sg.a.x+dx*best.t; car.y=sg.a.y+dy*best.t;
+  car.heading=Math.atan2(dx,dy);
+  snapped=true;
+}
+
+// ================= 遊戲介紹畫面 =================
+let introOn = false;                 // 載入完成後才會打開
+let introAuto = localStorage.getItem('introSkip') !== '1';   // 本次是否要自動顯示
+$('introSkip').checked = localStorage.getItem('introSkip') === '1';
+
+// ---- 說明分頁 ----
+let introPg = 1;
+function introPage(n){
+  introPg = Math.max(1, Math.min(3, n));
+  $('introPg1').classList.toggle('on', introPg === 1);
+  $('introPg2').classList.toggle('on', introPg === 2);
+  $('introPg3').classList.toggle('on', introPg === 3);
+  $('introPgTxt').textContent = introPg + ' / 3';
+  $('introPrev').disabled = introPg === 1;
+  $('introNext').disabled = introPg === 3;
+  if(introPg === 2) carTableBuild();
+}
+
+function carTableBuild(){
+  const stars = v => {                       // 1.0 = 3 顆星，依數值換算 1~5 顆
+    const n = Math.max(1, Math.min(5, Math.round(v * 3)));
+    return '<span class="bar5">' + '★'.repeat(n) + '</span><span style="color:#666">' + '★'.repeat(5 - n) + '</span>';
+  };
+  const note = ['新手首選，什麼都普通', '最快最靈活，但車身小', '穩定抓地，加速慢', '很慢又容易打滑，適合挑戰'];
+  let h = '<tr><th>車款</th><th>加速</th><th>極速</th><th>轉向</th><th>抓地</th><th>車身</th><th>特色</th></tr>';
+  CARS.forEach((c, i) => {
+    h += '<tr' + (i === carIdx ? ' style="background:rgba(255,235,59,.18)"' : '') + '>' +
+      '<td class="nm"><span class="carDot" style="background:' + c.color + '"></span>' + c.name + (i === carIdx ? ' ✔' : '') + '</td>' +
+      '<td>' + stars(c.accel) + '</td><td>' + stars(c.vmax) + '</td><td>' + stars(c.turn) + '</td><td>' + stars(c.grip) + '</td>' +
+      '<td>' + c.size.toFixed(2) + '</td><td style="text-align:left">' + (note[i] || '') + '</td></tr>';
+  });
+  $('carTb').innerHTML = h;
+}
+$('introPrev').onclick = () => introPage(introPg - 1);
+$('introNext').onclick = () => introPage(introPg + 1);
+
+
+function introShow(){ introOn=true; $('intro').style.display='flex'; $('introBtn').blur(); introPage(1); }
+function introHide(){
+  introOn=false; $('intro').style.display='none';
+  if($('introSkip').checked) localStorage.setItem('introSkip','1');
+  else localStorage.removeItem('introSkip');
+  audioInit && audioInit();
+}
+$('introStart').onclick = introHide;
+$('introBtn').onclick = ()=>{ introShow(); };
+
+// 介紹畫面開著時，攔截所有按鍵，避免誤觸遊戲操作
+addEventListener('keydown', e=>{
+  if(!introOn) return;
+  const k = e.key.toLowerCase();
+  if(k==='enter' || k==='escape' || k==='i') introHide();
+  if(k==='arrowright' || k==='d') introPage(introPg + 1);
+  if(k==='arrowleft'  || k==='a') introPage(introPg - 1);
+  e.stopPropagation();
+}, true);
+
+// ================= 清除遠處資料 =================
+const CLEAN_CELL_R = 1500;     // 格子重設距離（公尺）
+const CLEAN_WAY_R  = 2100;     // 道路清除距離（公尺）
+let cleanT = 0, cleanX = NaN, cleanY = NaN;
+
+function minDistToPts(pts, x, y){
+  let m = 1e9;
+  for(const p of pts){
+    const d = Math.abs(p.x - x) + Math.abs(p.y - y);   // 曼哈頓距離，夠用且快
+    if(d < m) m = d;
+  }
+  return m;
+}
+
+function cleanupFar(){
+  const cx = car.x, cy = car.y;
+  const t0 = performance.now();
+  const nWays0 = ways.length;
+
+  // 1. 道路：標記並移除
+  const keep = [];
+  for(const w of ways){
+    if(minDistToPts(w.pts, cx, cy) > CLEAN_WAY_R){
+      w.dead = true;
+      wayIds.delete(w.id);
+    }else keep.push(w);
+  }
+  const removed = ways.length - keep.length;
+  if(removed > 0){
+    ways.length = 0;
+    for(const w of keep) ways.push(w);
+
+    // 2. 路段索引
+    for(const [key, arr] of buckets){
+      const f = arr.filter(sg => !sg.w.dead);
+      if(f.length) buckets.set(key, f); else buckets.delete(key);
+    }
+
+    // 3. 障礙物、測速照相
+    for(let i = obstacles.length - 1; i >= 0; i--) if(obstacles[i].w.dead) obstacles.splice(i, 1);
+    for(let i = cams.length - 1; i >= 0; i--)      if(cams[i].w.dead)      cams.splice(i, 1);
+  }
+
+  // 4. 號誌與節點
+  for(let i = lights.length - 1; i >= 0; i--){
+    const l = lights[i];
+    if(Math.abs(l.x - cx) + Math.abs(l.y - cy) > CLEAN_WAY_R) lights.splice(i, 1);
+  }
+  for(const [key, n] of nodeMap){
+    if(Math.abs(n.x - cx) + Math.abs(n.y - cy) > CLEAN_WAY_R) nodeMap.delete(key);
+  }
+
+  // 5. 格子載入狀態：離太遠的重設，之後回來才會重新載入
+  const resetFar = (m, prefix) => {
+    for(const key of m.keys()){
+      const [i, j] = key.split(',').map(Number);
+      const p = toXY((i + .5) * CELL, (j + .5) * CELL);
+      if(Math.abs(p.x - cx) + Math.abs(p.y - cy) > CLEAN_CELL_R && m.get(key) !== 'loading') m.delete(key);
+    }
+  };
+  resetFar(cellState);
+  resetFar(extraState);
+
+  nsCache.clear();
+  if(removed > 0)
+    console.log('清除遠處資料：移除道路 ' + removed + ' 條，剩 ' + ways.length +
+      '，耗時 ' + (performance.now() - t0).toFixed(1) + ' ms');
+}
+
+function cleanupTick(dt){
+  cleanT += dt;
+  if(cleanT < 8) return;                 // 每 8 秒檢查一次
+  cleanT = 0;
+  if(inflight > 0 || queue.length) return;   // 載入中不清，避免干擾
+  // 距離上次清除移動超過 300 公尺才做，停在原地不浪費效能
+  if(isNaN(cleanX) || Math.abs(car.x - cleanX) + Math.abs(car.y - cleanY) > 300){
+    cleanX = car.x; cleanY = car.y;
+    cleanupFar();
+  }
+}
+
+// ================= 加油站與修車廠 =================
+const POI_RANGE = 12;      // 觸發距離（公尺）
+const POI_HOLD  = 3;       // 需停留秒數
+const POI_CD    = 90;      // 同一地點冷卻秒數
+const POI_TYPES = {
+  fuel:   {icon:'⛽', name:'加油站', heal:30,  color:'#ff9800'},
+  repair: {icon:'🔧', name:'修車廠', heal:100, color:'#2196f3'}
+};
+const pois = [];
+const poiKeys = new Set();
+let poiBusy = false, poiLastX = NaN, poiLastY = NaN, poiHold = 0, poiNow = null, poiRetryAt = 0;
+let poiSeeded = false;
+
+// 世界座標換成經緯度（用 toXY 做局部線性反推，不用知道原本的反函式）
+function xyToLL(x, y){
+  const a = toXY(25, 121), b = toXY(25.001, 121), c = toXY(25, 121.001);
+  const m11 = (b.x - a.x) / .001, m21 = (b.y - a.y) / .001;
+  const m12 = (c.x - a.x) / .001, m22 = (c.y - a.y) / .001;
+  const det = m11 * m22 - m12 * m21;
+  let lat = 25, lon = 121;
+  for(let i = 0; i < 2; i++){
+    const p = toXY(lat, lon);
+    const dx = x - p.x, dy = y - p.y;
+    lat += (m22 * dx - m12 * dy) / det;
+    lon += (-m21 * dx + m11 * dy) / det;
+  }
+  return {lat, lon};
+}
+
+
+
+function healPlayer(n){
+  car.hp = Math.min(100, car.hp + n);     // ← 如果你的血量變數不是 car.hp，改這行
+}
+
+// ---------- 抓不到真實資料時，在道路旁生成模擬站點 ----------
+function removeFakePois(){
+  for(let i = pois.length - 1; i >= 0; i--){
+    if(pois[i].fake){ poiKeys.delete(pois[i].key); pois.splice(i, 1); }
+  }
+}
+
+function poiFallback(){
+  const has = t => pois.some(p => p.type === t && Math.abs(p.x - car.x) + Math.abs(p.y - car.y) < 3000);
+  const need = {fuel: !has('fuel'), repair: !has('repair')};
+  if(!need.fuel && !need.repair) return;
+
+  const GOAL = {fuel: 12, repair: 8};     // ← 想要更多就改這兩個數字
+  const NEAR = 400;                       // 每種至少一間在這個距離內
+  const cnt = {fuel: 0, repair: 0};
+
+  const cand = ways.filter(w =>
+    w.len >= 60 &&
+    w.cfg !== ROAD.motorway && w.cfg !== ROAD.motorway_link &&
+    w.cfg !== ROAD.living_street && w.cfg !== ROAD.service &&
+    minDistToPts(w.pts, car.x, car.y) < 2000);
+  cand.sort((a, b) => rand01(a.id) - rand01(b.id));
+
+  const placed = pois.filter(p => p.fake);
+  const tryPlace = (w, type, maxD) => {
+    const key = 'fake' + w.id + type;
+    if(poiKeys.has(key)) return false;
+    const q = pointAt(w, w.len * (0.3 + 0.4 * rand01(w.id + 3)));
+    const side = rand01(w.id + 9) < .5 ? -1 : 1, off = (w.half + 3) * side;
+    const x = q.x + q.ty * off, y = q.y - q.tx * off;
+    if(maxD && Math.hypot(x - car.x, y - car.y) > maxD) return false;
+    if(placed.some(p => Math.hypot(p.x - x, p.y - y) < 100)) return false;
+    const rec = {key, x, y, type, fake: true, cd: 0,
+      name: (type === 'fuel' ? '加油站' : '修車廠') + '(模擬)'};
+    pois.push(rec); poiKeys.add(key); placed.push(rec); cnt[type]++;
+    return true;
+  };
+
+  // 第一輪：每種先在近處放一間
+  for(const type of ['fuel', 'repair']){
+    if(!need[type]) continue;
+    for(const w of cand){ if(tryPlace(w, type, NEAR)) break; }
+  }
+  // 第二輪：補到目標數量
+  for(const type of ['fuel', 'repair']){
+    if(!need[type]) continue;
+    for(const w of cand){
+      if(cnt[type] >= GOAL[type]) break;
+      tryPlace(w, type, 0);
+    }
+  }
+  console.log('POI 使用模擬站點：加油站', cnt.fuel, '、修車廠', cnt.repair);
+}
+
+
+
+async function poiFetch(){
+  if(poiBusy) return;
+  poiBusy = true;
+  poiLastX = car.x; poiLastY = car.y;
+  let ok = false;
+  const {lat, lon} = xyToLL(car.x, car.y);
+  const ck = 'poi' + lat.toFixed(2) + ',' + lon.toFixed(2);   // 快取鍵，約 1 公里一格
+
+  // 1. 先讀快取
+  try{
+    const cached = await cacheGet(ck);
+    if(cached && cached.length){
+      for(const e of cached) if(!poiKeys.has(e.key)){ poiKeys.add(e.key); pois.push(e); }
+      console.log('POI 使用快取，共', pois.length, '筆');
+      ok = true;
+    }
+  }catch(e){}
+
+  // 2. 沒快取才上網查
+  if(!ok){
+    const q = '[out:json][timeout:25];(' +
+      'nwr["amenity"="fuel"](around:3000,' + lat + ',' + lon + ');' +
+      'nwr["shop"="car_repair"](around:3000,' + lat + ',' + lon + ');' +
+      ');out center qt;';
+    for(let a = 0; a < ENDPOINTS.length && !ok; a += 2){
+      const urls = [ENDPOINTS[a], ENDPOINTS[(a + 1) % ENDPOINTS.length]];
+      const ctls = urls.map(() => new AbortController());
+      const timers = ctls.map(c => setTimeout(() => c.abort(), 25000));
+      try{
+        const j = await Promise.any(urls.map((u, k) =>
+          fetch(u + '?data=' + encodeURIComponent(q), {signal: ctls[k].signal})
+            .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        ));
+        timers.forEach(clearTimeout);
+        ctls.forEach(c => c.abort());
+        const fresh = [];
+        for(const el of j.elements){
+          const la = el.lat ?? el.center?.lat, lo = el.lon ?? el.center?.lon;
+          if(la == null || !el.tags) continue;
+          const key = el.type + el.id;
+          const p = toXY(la, lo);
+          const type = el.tags.amenity === 'fuel' ? 'fuel' : 'repair';
+          const rec = {key, x: p.x, y: p.y, type,
+            name: el.tags['name:zh'] || el.tags.name || POI_TYPES[type].name, cd: 0};
+          fresh.push(rec);
+          if(!poiKeys.has(key)){ poiKeys.add(key); pois.push(rec); }
+        }
+        if(fresh.length) cachePut(ck, fresh);     // 存快取（7 天）
+        console.log('POI 載入完成，本次', fresh.length, '筆，共', pois.length, '筆');
+        ok = true;
+      }catch(e){
+        timers.forEach(clearTimeout);
+        console.warn('POI 查詢失敗', urls.join(' , '));
+      }
+    }
+  }
+
+  if(ok){ removeFakePois(); poiFallback(); }   // 真實資料不足的類型,用模擬站補
+  else{
+    poiLastX = NaN; poiRetryAt = performance.now() + 20000;
+    poiFallback();                               // 抓不到就生成模擬站
+  }
+  poiBusy = false;
+}
+
+// ================= 載客任務系統 =================
+let rideMoney = 0;
+const ride = {
+  state: 'idle',              // idle | pickup | riding
+  pax: null, dest: null, nav: null,
+  waitT: 0, stopT: 0, used: 0, limit: 0, dist: 0,
+  jerk: 0, lastV: 0, hits: 0
+};
+
+function rideRandomRoadPoint(minD, maxD){
+  const cand = ways.filter(w =>
+    w.len >= 60 &&
+    w.cfg !== ROAD.motorway && w.cfg !== ROAD.motorway_link &&
+    w.cfg !== ROAD.living_street);
+  for(let i = 0; i < 200 && cand.length; i++){
+    const w = cand[(Math.random() * cand.length) | 0];
+    const q = pointAt(w, w.len * (0.2 + 0.6 * Math.random()));
+    const side = Math.random() < .5 ? -1 : 1, off = (w.half + 2) * side;
+    const x = q.x + q.ty * off, y = q.y - q.tx * off;
+    const d = Math.hypot(x - car.x, y - car.y);
+    if(d >= minD && d <= maxD) return {x, y};
+  }
+  return null;
+}
+
+function rideSetNav(p, name){
+  ride.nav = {x: p.x, y: p.y, name: name, ride: true};
+  dest = ride.nav;
+  $('navHud').style.display = 'block';
+}
+
+function rideRequest(){
+  if(!started || car.dead) return;
+  if(ride.state !== 'idle'){ toast('載客任務進行中'); return; }
+  if(mission){ toast('請先完成目前的送貨任務'); return; }
+  const p = rideRandomRoadPoint(300, 900) || rideRandomRoadPoint(100, 300);
+  if(!p){ toast('附近沒有乘客，換個地方試試'); return; }
+  ride.pax = p; ride.state = 'pickup'; ride.waitT = 0; ride.stopT = 0;
+  rideSetNav(p, '🧍 乘客');
+  toast('🧍 有乘客叫車！到綠圈停車 1.5 秒接客');
+}
+
+function rideCancel(msg){
+  if(dest && dest.ride){ dest = null; $('navHud').style.display = 'none'; }
+  ride.state = 'idle'; ride.pax = ride.dest = ride.nav = null;
+  if(msg) toast(msg);
+}
+
+function rideUpdate(dt){
+  if(ride.state === 'idle') return;
+  // 導航被別的功能蓋掉時，自動還原
+  if(dest !== ride.nav){ dest = ride.nav; $('navHud').style.display = 'block'; }
+
+  const v = Math.abs(car.speed);
+  const target = ride.state === 'pickup' ? ride.pax : ride.dest;
+  const d = Math.hypot(target.x - car.x, target.y - car.y);
+  if(d < 25 && v < 1.5) ride.stopT += dt; else ride.stopT = 0;
+
+  if(ride.state === 'pickup'){
+    ride.waitT += dt;
+    if(ride.waitT > 180){
+      car.score = Math.max(0, car.score - 20);
+      rideCancel('乘客等太久，取消了 (-20 分)'); return;
+    }
+    if(ride.stopT > 1.5){
+      const dst = rideRandomRoadPoint(600, 2000) || rideRandomRoadPoint(300, 1000) || rideRandomRoadPoint(150, 600);
+      if(!dst){ rideCancel('找不到目的地，任務取消'); return; }
+      ride.dest = dst;
+      ride.dist = Math.hypot(dst.x - car.x, dst.y - car.y);
+      ride.limit = ride.dist * 1.4 / 8 + 45;     // 道路比直線長，抓 1.4 倍
+      ride.used = 0; ride.jerk = 0; ride.hits = 0; ride.lastV = v;
+      ride.state = 'riding'; ride.stopT = 0;
+      rideSetNav(dst, '📍 目的地');
+      toast('✅ 乘客上車！目的地約 ' + Math.round(ride.dist) + ' 公尺，限時 ' + Math.round(ride.limit) + ' 秒');
+    }
+    return;
+  }
+
+  // 載送中
+  ride.used += dt;
+  const acc = Math.abs(v - ride.lastV) / Math.max(dt, .001);
+  if(acc > 8) ride.jerk += (acc - 8) * dt;
+  ride.lastV = v;
+
+  if(ride.used > ride.limit * 2){
+    car.score = Math.max(0, car.score - 30);
+    rideCancel('逾時太久，乘客自己下車了 (-30 分)'); return;
+  }
+
+  if(ride.stopT > 1.5){
+    const fare = Math.round(50 + ride.dist / 1000 * 30);
+    const timeBonus = ride.used <= ride.limit ? 0.5 * (1 - ride.used / ride.limit) : 0;
+    const smooth = Math.max(0, 0.3 - ride.jerk * 0.05 - ride.hits * 0.1);
+    const tip = Math.round(fare * (timeBonus + smooth));
+    rideMoney += fare + tip;
+    $('rideMoney').textContent = rideMoney;
+    const gain = 10 + Math.round(ride.dist / 100);
+    car.score += gain;
+    if(typeof sfx === 'function') sfx('bonus');
+    toast('💰 車資 $' + fare + ' + 小費 $' + tip + ' ，分數 +' + gain +
+          (timeBonus > 0 ? '（準時）' : '') + (smooth > .2 ? '（平穩）' : ''));
+    rideCancel();
+  }
+}
+
+function rideDraw(sx, sy){
+  if(ride.state === 'idle') return;
+  const t = ride.state === 'pickup' ? ride.pax : ride.dest;
+  const x = sx(t.x), y = sy(t.y);
+  const pulse = 1 + 0.15 * Math.sin(performance.now() / 200);
+  ctx.save();
+  ctx.fillStyle = ride.state === 'pickup' ? '#4caf50' : '#e91e63';
+  ctx.beginPath(); ctx.arc(x, y, 16 * pulse, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(ride.state === 'pickup' ? '🧍' : '📍', x, y + 1);
+  // 25 公尺停車範圍
+  const ppm = Math.pow(2, zoom) / (156543.03 * Math.cos(carLL()[0] * Math.PI / 180));
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 25 * ppm, 0, 7); ctx.stroke();
+  ctx.restore();
+
+  // 資訊列（放在畫面下方，避免跟其他提示重疊）
+  const d = Math.round(Math.hypot(t.x - car.x, t.y - car.y));
+  let s = (ride.state === 'pickup' ? '🧍 前往接客 ' : '🚖 載送中 ') + d + ' m';
+  if(ride.state === 'riding') s += ' ｜ 剩 ' + Math.max(0, Math.ceil(ride.limit - ride.used)) + ' 秒';
+  else s += ' ｜ 等待 ' + Math.max(0, Math.ceil(180 - ride.waitT)) + ' 秒';
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(W / 2 - 130, H - 195, 260, 26);
+  ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(s, W / 2, H - 182);
+  ctx.restore();
+}
+
+
+
+
+function poiUpdate(dt){
+    // 道路載入完成後，若附近還沒有站，先放模擬站，真實資料到了再替換
+  if(started && !poiSeeded){
+    poiSeeded = true;
+    poiFallback();
+  }
+  // 遊戲開始後才抓；離上次抓取超過 1200 公尺（或第一次）才再抓
+  if(started && performance.now() > poiRetryAt &&
+     (isNaN(poiLastX) || Math.abs(car.x - poiLastX) + Math.abs(car.y - poiLastY) > 1200)) poiFetch();
+
+  // 清掉太遠的地點，並用 p.key 重建索引
+  if(pois.length > 150){
+    for(let i = pois.length - 1; i >= 0; i--)
+      if(Math.abs(pois[i].x - car.x) + Math.abs(pois[i].y - car.y) > 4000) pois.splice(i, 1);
+    poiKeys.clear();
+    for(const p of pois) poiKeys.add(p.key);
+  }
+
+  let near = null, bd = POI_RANGE;
+  for(const p of pois){
+    if(p.cd > 0) p.cd -= dt;
+    const d = Math.hypot(p.x - car.x, p.y - car.y);
+    if(d < bd && p.cd <= 0){ bd = d; near = p; }
+  }
+  poiNow = near;
+
+  const speedKmh = Math.abs(car.speed) * 3.6;
+  const needs = near && (near.type === 'fuel' ? (car.fuel < 100 || car.hp < 100) : car.hp < 100);
+  if(near && speedKmh < 5 && needs){
+    poiHold += dt;
+    if(poiHold >= POI_HOLD){
+      const t = POI_TYPES[near.type];
+      healPlayer(t.heal);
+      let msg = t.icon + ' ' + near.name + '：血量 +' + t.heal;
+      if(near.type === 'fuel'){
+        car.fuel = Math.min(100, car.fuel + FUEL_ADD);
+        msg += '　油量 +' + FUEL_ADD;
+      }
+      near.cd = POI_CD;
+      poiHold = 0;
+      toast(msg);
+    }
+  }else poiHold = 0;
+}
+
+function poiDraw(sx, sy){
+  for(const p of pois){
+    const x = sx(p.x), y = sy(p.y);
+    if(x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;
+    const t = POI_TYPES[p.type];
+    ctx.globalAlpha = p.cd > 0 ? .35 : 1;
+    ctx.fillStyle = t.color;
+    ctx.beginPath(); ctx.arc(x, y, 14, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.fillText(t.icon, x, y + 1);
+    ctx.globalAlpha = 1;
+  }
+  // 補血進度條與提示
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if(poiNow && poiHold > 0){
+    const w = 160, x = W / 2 - w / 2, y = H - 130;
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(x - 6, y - 22, w + 12, 40);
+    ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif';
+    ctx.fillText(POI_TYPES[poiNow.type].icon + ' ' + poiNow.name + ' 補給中…', W / 2, y - 8);
+    ctx.fillStyle = '#444'; ctx.fillRect(x, y, w, 8);
+    ctx.fillStyle = POI_TYPES[poiNow.type].color; ctx.fillRect(x, y, w * poiHold / POI_HOLD, 8);
+  }else if(poiNow){
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(W / 2 - 90, H - 150, 180, 26);
+    ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif';
+    ctx.fillText('停下來即可補血', W / 2, H - 137);
+  }
+}
+
+// ================= #4 油量系統 =================
+const FUEL_IDLE = 0.01;      // 怠速消耗（每秒）
+const FUEL_RATE = 0.0025;    // 行駛消耗（每公尺）
+const FUEL_ADD  = 50;        // 加油站一次補多少
+let fuelWarn = 0;            // 0=正常 1=已提示低油量 2=已提示沒油
+
+function fuelUpdate(dt){
+  if(car.fuel > 0){
+    car.fuel -= FUEL_IDLE * dt + Math.abs(car.speed) * dt * FUEL_RATE;
+    if(car.fuel < 0) car.fuel = 0;
+  }
+  if(car.fuel <= 0 && fuelWarn < 2){
+    fuelWarn = 2;
+    toast('⛽ 沒油了！按 G 導航到加油站');
+  }else if(car.fuel < 20 && car.fuel > 0 && fuelWarn < 1){
+    fuelWarn = 1;
+    toast('⚠️ 油量偏低！按 G 導航到加油站');
+  }else if(car.fuel >= 20){
+    fuelWarn = 0;
+  }
+}
+
+// ================= #5 車輛損壞外觀 =================
+const smoke = [];
+
+// 損壞程度 0~1（hp 60 以上為 0，hp 0 為 1）
+function damageLevel(){ return Math.max(0, Math.min(1, (60 - car.hp) / 60)); }
+
+function smokeUpdate(dt){
+  // 更新現有煙霧
+  for(let i = smoke.length - 1; i >= 0; i--){
+    const s = smoke[i];
+    s.life -= dt;
+    if(s.life <= 0){ smoke.splice(i, 1); continue; }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    s.r += dt * 6;
+  }
+  if(car.dead) return;
+  const lv = damageLevel();
+  if(lv <= 0) return;
+
+  // 產生煙霧：越嚴重越多
+  s_acc += dt * (2 + lv * 14);
+  while(s_acc >= 1 && smoke.length < 80){
+    s_acc -= 1;
+    const back = car.heading + Math.PI + (Math.random() - .5) * .8;
+    const sp = 1 + Math.random() * 2;
+    // 從引擎蓋（車頭）冒出
+    const fx = car.x + Math.sin(car.heading) * 1.5, fy = car.y + Math.cos(car.heading) * 1.5;
+    smoke.push({
+      x: fx + (Math.random() - .5), y: fy + (Math.random() - .5),
+      vx: Math.sin(back) * sp - Math.sin(car.heading) * car.speed * .3,
+      vy: Math.cos(back) * sp - Math.cos(car.heading) * car.speed * .3,
+      r: 2 + Math.random() * 2, life: 0.8 + Math.random() * 0.8, max: 1.6,
+      dark: lv > .75 ? 0.1 : (lv > .4 ? 0.35 : 0.65)    // 越嚴重越黑
+    });
+  }
+  // 重度損壞：火花
+  if(car.hp < 15 && Math.random() < dt * 4){
+    smoke.push({
+      x: car.x + (Math.random() - .5) * 2, y: car.y + (Math.random() - .5) * 2,
+      vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 8,
+      r: 0.6, life: 0.25, max: 0.25, spark: true, dark: 0
+    });
+  }
+}
+let s_acc = 0;
+
+function smokeDraw(sx, sy, ppm){
+  for(const s of smoke){
+    const x = sx(s.x), y = sy(s.y);
+    if(x < -40 || x > W + 40 || y < -40 || y > H + 40) continue;
+    const a = Math.max(0, s.life / s.max);
+    if(s.spark){
+      ctx.fillStyle = 'rgba(255,200,60,' + a + ')';
+      ctx.beginPath(); ctx.arc(x, y, Math.max(1.5, s.r * ppm), 0, 7); ctx.fill();
+    }else{
+      const g = Math.floor(255 * s.dark);
+      ctx.fillStyle = 'rgba(' + g + ',' + g + ',' + g + ',' + (0.55 * a) + ')';
+      ctx.beginPath(); ctx.arc(x, y, Math.max(3, s.r * ppm * .6), 0, 7); ctx.fill();
+    }
+  }
+}
+
+// 車身顏色依損壞程度變暗
+function carColorDamaged(hex){
+  const lv = damageLevel();
+  if(lv <= 0) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const k = 1 - lv * 0.5;                   // 最暗剩 50%
+  const r = Math.round(((n >> 16) & 255) * k);
+  const g = Math.round(((n >> 8) & 255) * k);
+  const b = Math.round((n & 255) * k);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+// ================= #6 倒車入庫挑戰 =================
+const PARK_LEN = 5.6, PARK_WID = 3.0;   // 停車格大小(公尺)
+const PARK_TIME = 60;                   // 限時(秒)
+const PARK_POS_TOL = 0.9;               // 中心允許誤差(公尺)
+const PARK_ANG_TOL = 10;                // 角度允許誤差(度)
+const PARK_HOLD = 1.2;                  // 需維持秒數
+let park = null;
+
+function angDiff(a, b){
+  let d = a - b;
+  while(d > Math.PI) d -= Math.PI * 2;
+  while(d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+function parkStart(){
+  if(!started || car.dead) return;
+  if(park){ park = null; $('parkHud').style.display = 'none'; toast('🅿️ 已取消挑戰'); return; }
+  const h = car.heading;
+  const fx = Math.sin(h), fy = Math.cos(h);       // 前方向量
+  const rx = Math.cos(h), ry = -Math.sin(h);      // 右側向量(若格子出現在左邊,把 SIDE 改成 -1)
+  const SIDE = 1;
+  park = {
+    x: car.x + fx * 12 + rx * 6 * SIDE,
+    y: car.y + fy * 12 + ry * 6 * SIDE,
+    a: h - Math.PI / 2 * SIDE,                    // 開口朝向馬路,車頭最後要朝這個方向
+    t: PARK_TIME, hold: 0
+  };
+  $('parkHud').style.display = 'block';
+  toast('🅿️ 倒車入庫開始!車頭朝外停進綠框');
+}
+
+function parkUpdate(dt){
+  if(!park) return;
+  if(car.dead){ park = null; $('parkHud').style.display = 'none'; return; }
+  park.t -= dt;
+
+  const dx = car.x - park.x, dy = car.y - park.y;
+  const dist = Math.hypot(dx, dy);
+  const ang = Math.abs(angDiff(car.heading, park.a)) * 180 / Math.PI;
+  const kmh = Math.abs(car.speed) * 3.6;
+  const ok = dist < PARK_POS_TOL && ang < PARK_ANG_TOL && kmh < 3;
+
+  park.hold = ok ? park.hold + dt : 0;
+
+  $('parkHud').innerHTML =
+    '🅿️ 倒車入庫　⏱ ' + Math.max(0, Math.ceil(park.t)) + ' 秒<br>' +
+    '距離 ' + dist.toFixed(1) + ' m　角度 ' + ang.toFixed(0) + '°　' +
+    (ok ? '✅ 保持不動 ' + (PARK_HOLD - park.hold).toFixed(1) : '調整中');
+
+  if(park.hold >= PARK_HOLD){
+    const acc = Math.max(0, 1 - dist / PARK_POS_TOL) * 0.5 + Math.max(0, 1 - ang / PARK_ANG_TOL) * 0.5;
+    const pts = Math.round(200 + park.t * 5 + acc * 200);
+    car.score += pts;
+    toast('🅿️ 入庫成功!精準度 ' + Math.round(acc * 100) + '%　+' + pts + ' 分');
+    park = null; $('parkHud').style.display = 'none';
+  }else if(park.t <= 0){
+    toast('🅿️ 時間到,挑戰失敗');
+    park = null; $('parkHud').style.display = 'none';
+  }
+}
+
+function parkDraw(sx, sy, ppm){
+  if(!park) return;
+  const ax = Math.sin(park.a), ay = Math.cos(park.a);     // 長軸(開口方向)
+  const px = Math.cos(park.a), py = -Math.sin(park.a);    // 寬軸
+  const hl = PARK_LEN / 2, hw = PARK_WID / 2;
+  const P = (l, w) => [sx(park.x + ax * l + px * w), sy(park.y + ay * l + py * w)];
+  const c1 = P(hl, hw), c2 = P(hl, -hw), c3 = P(-hl, -hw), c4 = P(-hl, hw);
+
+  // 底色
+  ctx.fillStyle = 'rgba(76,175,80,.28)';
+  ctx.beginPath();
+  ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c2[0], c2[1]);
+  ctx.lineTo(c3[0], c3[1]); ctx.lineTo(c4[0], c4[1]);
+  ctx.closePath(); ctx.fill();
+
+  // 邊線:開口那側不畫,裡側(車尾)畫粗線
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(2, ppm * .12);
+  ctx.beginPath();
+  ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c4[0], c4[1]);
+  ctx.lineTo(c3[0], c3[1]); ctx.lineTo(c2[0], c2[1]);
+  ctx.stroke();
+  ctx.strokeStyle = '#ffeb3b'; ctx.lineWidth = Math.max(3, ppm * .25);
+  ctx.beginPath(); ctx.moveTo(c3[0], c3[1]); ctx.lineTo(c4[0], c4[1]); ctx.stroke();
+
+  // 箭頭:指出車頭要朝的方向
+  const t = P(hl * .7, 0), b = P(-hl * .3, 0);
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = Math.max(2, ppm * .15);
+  ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(t[0], t[1]); ctx.stroke();
+}
+
+
+// ================= 玩家方向燈 =================
+let sig = 0;            // -1 左、1 右、2 雙黃燈、0 關
+let sigT = 0, sigTurned = 0, sigAng = 0;
+
+function sigSet(v){
+  sig = (sig === v) ? 0 : v;
+  sigT = 0; sigTurned = 0; sigAng = car.heading;
+  toast(sig === 0 ? '方向燈關閉' : sig === -1 ? '⬅️ 左方向燈' : sig === 1 ? '右方向燈 ➡️' : '⚠️ 雙黃燈');
+}
+
+function sigUpdate(dt){
+  if(!sig || sig === 2) return;
+  sigT += dt;
+  let d = car.heading - sigAng;
+  while(d > Math.PI) d -= 2 * Math.PI;
+  while(d < -Math.PI) d += 2 * Math.PI;
+  sigAng = car.heading;
+  sigTurned += d;
+  // 方向燈只在對應方向轉彎才關
+if((sig === -1 && sigTurned < -0.9) || (sig === 1 && sigTurned > 0.9) || sigT > 15){ sig = 0; sigTurned = 0; }
+}
+
+// 在玩家車上畫方向燈。x,y 是畫面座標，ang 是車頭角度，L、W 是車長寬
+function sigDraw(x, y, ang, L, W){
+  if(!sig || !(Math.floor(performance.now() / 350) % 2)) return;
+  const hx = Math.sin(ang), hy = -Math.cos(ang), rx = Math.cos(ang), ry = Math.sin(ang);
+  ctx.fillStyle = '#ff9800';
+  for(const side of [-1, 1]){
+    if(sig !== 2 && sig !== side) continue;
+    for(const end of [1, -1]){            // 車頭與車尾各一顆
+      ctx.beginPath();
+      ctx.arc(x + hx * L / 2 * end + rx * W / 2 * side, y + hy * L / 2 * end + ry * W / 2 * side, 3.5, 0, 7);
+      ctx.fill();
+    }
+  }
+}
+
+// ---------- 每幀更新 ----------
+let loadStart=performance.now();
+function updateLoading(){
+  const box=$('loading');
+  if(box.style.display==='none'||box.dataset.closing) return;
+  const ready=currentCellReady()&&snapped;
+  const sec=Math.floor((performance.now()-loadStart)/1000);
+  if(ready){
+    box.dataset.closing='1';
+    $('loadBar').style.width='100%';
+    setTimeout(()=>{
+      box.style.display='none';
+      delete box.dataset.closing;
+      if(introAuto){ introAuto=false; introShow(); }
+    },300);
+    return;
+  }
+
+
+  $('loadBar').style.width=Math.min(90,sec*3)+'%';
+  $('loadTitle').textContent='🗺️ 地圖載入中… '+sec+' 秒';
+  if(sec>20) $('loadTip').textContent='伺服器較忙，正在自動切換備用伺服器…';
+  if(sec>60) $('loadTip').textContent='載入很久了，可以重新整理，或換個傳送地點試試';
+}
+const _tc={};
+function setT(id,v){ if(_tc[id]!==v){ _tc[id]=v; $(id).textContent=v; } }
+let started=false;
+let nearCD=0;
+function update(dt){
+updateLoading();
+if(introOn) return;          // 介紹畫面開著時暫停遊戲
+if(!started){
+  if(!snapped&&currentCellReady()) snapToRoad();
+  if(!(currentCellReady()&&snapped)){ ensureLoaded(); return; }
+  started=true;
+}
+
+  gt+=dt;
+  if(car.dead) return;
+
+  const thr=keys['w']||keys['arrowup'], brk=keys['s']||keys['arrowdown'];
+  let st=((keys['d']||keys['arrowright'])?1:0)-((keys['a']||keys['arrowleft'])?1:0);
+  if(slipT>0) st=Math.sin(gt*9)*0.8;        // 打滑：方向亂飄
+
+  if(!snapped&&currentCellReady()) snapToRoad();
+
+  const info=nearestRoad(car.x,car.y);
+  const cellOk=currentCellReady();
+  const on=!!info&&info.dist<=info.seg.w.half+1.5;
+  const cap=(on||!cellOk)?car.maxSpeed*CAR.vmax:9; // 該格還沒載好時不當成路外，不限速
+
+
+  if(thr && car.fuel>0) car.speed+=car.accel*CAR.accel*dt*(car.speed<0?2:1);
+  if(brk) car.speed-=(car.speed>0?car.brake*grip():car.accel*.6)*dt;
+  if(keys[' ']) car.speed-=Math.sign(car.speed)*Math.min(Math.abs(car.speed),30*dt);
+  car.speed-=car.speed*(on?0.05:0.6)*dt;
+  if(car.speed>cap) car.speed-=(car.speed-cap)*Math.min(1,dt*2);
+  car.speed=Math.max(car.reverseMax,car.speed);
+  if(!thr&&!brk&&Math.abs(car.speed)<.3) car.speed=0;
+
+  car.heading+=st*dt*1.8*CAR.turn*grip()*CAR.grip*Math.min(1,Math.abs(car.speed)/6)/(1+Math.abs(car.speed)/25)*(car.speed<0?-1:1);
+  car.x+=Math.sin(car.heading)*car.speed*dt;
+  car.y+=Math.cos(car.heading)*car.speed*dt;
+
+  ensureLoaded();
+  cleanupTick(dt);
+  poiUpdate(dt);
+  fuelUpdate(dt);
+  smokeUpdate(dt);
+  parkUpdate(dt);
+  sigUpdate(dt);
+  trafficUpdate(dt);
+  rideUpdate(dt);
+
+  // 碰撞：AI 車輛
+  for(const n of npcs){
+    const d=Math.hypot(n.x-car.x,n.y-car.y);
+    const rad=n.type==='scooter'?2.2:3.2;
+    if(d<rad&&n.hitCD<=0){
+      const rel=Math.abs(car.speed)+n.v*.5;
+      const dmg=Math.min(30,Math.round(3+rel*1.0));
+      damage(dmg); n.hitCD=2; n.v=0;
+      car.speed*=.35; car.score=Math.max(0,car.score-100);
+      toast('💥 撞到車 -'+dmg);
+      addWanted(1,'肇事'); comboBreak();
+    }else if(d<rad+2&&d>=rad&&Math.abs(car.speed)>8&&!n.near){
+      n.near=true; comboHit(50,'😅 驚險閃過');
+    }else if(d>9) n.near=false;
+  }
+  // 碰撞：行人
+  for(const p of peds){
+    if(p.hit) continue;
+    const d=Math.hypot(p.x-car.x,p.y-car.y);
+    if(d<2.0){
+      p.hit=true; p.hitT=3; car.hits++;
+      damage(12); car.score=Math.max(0,car.score-500);
+      car.speed*=.5; toast('🚑 撞到行人！-12 血 -500 分');
+      addWanted(2,'撞到行人'); comboBreak();
+    }else if(d<3.8&&Math.abs(car.speed)>6&&!p.near){
+      p.near=true; comboHit(30,'😰 擦身而過');
+    }else if(d>8) p.near=false;
+  }
+  navUpdate();
+  lowHpHintUpdate();
+  missionUpdate(dt);
+  envUpdate(dt);
+  comboUpdate(dt);
+  policeUpdate(dt);
+  camUpdate(dt);
+  obstacleUpdate(dt);
+  engineUpdate(dt);
+  redLightUpdate(dt);
+  achUpdate(dt);
+
+  // 行駛里程小額加分
+  car.score+=Math.max(0,car.speed)*dt*0.2;
+
+  // HUD（值沒變就不寫 DOM）
+  setT('speed',Math.round(Math.abs(car.speed)*3.6));
+  setT('hpnum',car.hp);
+  if(_tc.hpw!==car.hp){
+    _tc.hpw=car.hp;
+    $('hpfill').style.width=car.hp+'%';
+    $('hpfill').style.background=car.hp>50?'#66bb6a':(car.hp>25?'#ffa726':'#ef5350');
+  }
+  setT('fuelnum',Math.ceil(car.fuel));
+  if(_tc.fuw!==Math.ceil(car.fuel)){
+    _tc.fuw=Math.ceil(car.fuel);
+    $('fuelfill').style.width=car.fuel+'%';
+    $('fuelfill').style.background=car.fuel>40?'#ffa726':(car.fuel>20?'#ff7043':'#ef5350');
+  }
+  setT('score',Math.floor(car.score));
+  setT('hitCnt',car.hits);
+  setT('tkCnt',car.tickets);
+  setT('tkFine',car.fines);
+  {const nm={green:'綠',yellow:'黃',red:'紅'};
+   setT('light','南北'+nm[lightState(true)]+Math.ceil(lightLeft(true))+
+     ' / 東西'+nm[lightState(false)]+Math.ceil(lightLeft(false)));}
+  if(info&&on){
+    const w=info.seg.w;
+    setT('roadName',w.name||w.cfg.name);
+    setT('roadType',w.cfg.name+(w.oneway?'（單行道）':''));
+    setT('limitSign',w.limit);
+    const over=Math.abs(car.speed)*3.6>w.limit;
+    $('limitSign').style.borderColor=over?'#ff1744':'#d32f2f';
+    $('warn').style.display='none'; $('map').classList.remove('offroad');
+  }else{
+    setT('roadName',currentCellReady()?'路外':'載入道路中…');
+    setT('roadType','');
+    setT('limitSign','--');
+    $('warn').style.display=currentCellReady()?'block':'none';
+    $('map').classList.toggle('offroad',currentCellReady());
+  }
+  {const ll=carLL(); setT('coord',ll[0].toFixed(5)+', '+ll[1].toFixed(5));}
+}
+
+// ---------- 繪圖 ----------
+function drawBox(x,y,ang,len,wid,color){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(ang);
+  ctx.fillStyle=color; ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
+  ctx.fillRect(-wid/2,-len/2,wid,len); ctx.strokeRect(-wid/2,-len/2,wid,len);
+  ctx.fillStyle='rgba(200,230,255,.9)';
+  ctx.fillRect(-wid/2+wid*.15,-len/2+len*.12,wid*.7,len*.22);
+  ctx.restore();
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const ll=carLL();
+  const ppm=Math.pow(2,zoom)/(156543.03*Math.cos(ll[0]*Math.PI/180));
+  const sx=x=>W/2+(x-car.x)*ppm, sy=y=>H/2-(y-car.y)*ppm;
+
+  // 道路疊圖
+  if(overlayOn){
+    ctx.lineCap='round'; ctx.globalAlpha=.18;
+    const groups=new Map();
+    for(const sg of nearbySegs(car.x,car.y)){
+      const ax=sx(sg.a.x),ay=sy(sg.a.y),bx=sx(sg.b.x),by=sy(sg.b.y);
+      if((ax<-50&&bx<-50)||(ax>W+50&&bx>W+50)||(ay<-50&&by<-50)||(ay>H+50&&by>H+50)) continue;
+      const lw=Math.max(2,Math.round(sg.w.half*2*ppm));
+      const gk=sg.w.cfg.color+'|'+lw;
+      let g=groups.get(gk); if(!g) groups.set(gk,g=[]);
+      g.push(ax,ay,bx,by);
+    }
+    for(const [gk,arr] of groups){
+      const i=gk.indexOf('|');
+      ctx.strokeStyle=gk.slice(0,i); ctx.lineWidth=+gk.slice(i+1);
+      ctx.beginPath();
+      for(let q=0;q<arr.length;q+=4){ ctx.moveTo(arr[q],arr[q+1]); ctx.lineTo(arr[q+2],arr[q+3]); }
+      ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+
+    // 路面障礙物
+  for(const o of obstacles){
+    const x=sx(o.x), y=sy(o.y);
+    if(x<-60||x>W+60||y<-60||y>H+60) continue;
+    const def=OB[o.kind];
+    if(o.kind==='cone'&&o.hit&&o.fly<=0) continue;
+    const rr=Math.max(def.r*ppm*VIS,10);
+    if(o.kind==='parked'){
+      drawBox(x,y,o.ang,Math.max(4.5*VIS*ppm,18),Math.max(1.9*VIS*ppm,9),'hsl('+o.hue+',25%,45%)');
+      ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('🅿️',x,y-14);
+    }else if(o.kind==='pothole'){
+      ctx.fillStyle='rgba(30,20,10,.85)';
+      ctx.beginPath(); ctx.ellipse(x,y,rr,rr*.7,o.ang,0,7); ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+    }else if(o.kind==='oil'){
+      ctx.fillStyle='rgba(20,20,40,.6)';
+      ctx.beginPath(); ctx.ellipse(x,y,rr*1.1,rr*.8,o.ang,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(120,200,255,.8)'; ctx.lineWidth=1.5; ctx.stroke();
+    }else{
+      const fly=o.hit?o.fly*80:0;
+      ctx.font=Math.max(18,rr*1.5)+'px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(def.emoji,x,y-fly);
+    }
+  }  
+  
+  // 路口號誌
+  {
+    const COL={green:'#4caf50',yellow:'#ffeb3b',red:'#f44336'};
+    const nsS=lightState(true), ewS=lightState(false);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='bold 12px sans-serif'; ctx.lineWidth=3; ctx.strokeStyle='#000';
+    for(const j of lights){
+      const x=sx(j.x), y=sy(j.y);
+      if(x<-60||x>W+60||y<-60||y>H+60) continue;
+      const d=Math.max(16,5*ppm);
+      const lamps=[[0,-d,nsS],[0,d,nsS],[-d,0,ewS],[d,0,ewS]];
+      for(const [ox,oy,s] of lamps){
+        ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x+ox,y+oy,9,0,7); ctx.fill();
+        ctx.fillStyle=COL[s]; ctx.beginPath(); ctx.arc(x+ox,y+oy,6,0,7); ctx.fill();
+      }
+      ctx.fillStyle='#fff';
+      const a=String(Math.ceil(lightLeft(true))), b=String(Math.ceil(lightLeft(false)));
+      ctx.strokeText(a,x,y-d-16); ctx.fillText(a,x,y-d-16);
+      ctx.strokeText(b,x+d+18,y); ctx.fillText(b,x+d+18,y);
+    }
+  }
+
+    // 測速照相
+  for(const c of cams){
+    const x=sx(c.x), y=sy(c.y);
+    if(x<-80||x>W+80||y<-80||y>H+80) continue;
+    const hw=Math.max(10,c.w.half*ppm);
+    ctx.strokeStyle='#455a64'; ctx.lineWidth=4; ctx.lineCap='butt';
+    ctx.beginPath();
+    ctx.moveTo(x-c.ty*hw, y-c.tx*hw);
+    ctx.lineTo(x+c.ty*hw, y+c.tx*hw);
+    ctx.stroke();
+    if(c.flash>0){
+      ctx.fillStyle='rgba(255,255,255,'+Math.min(1,c.flash*3)+')';
+      ctx.beginPath(); ctx.arc(x,y,40,0,7); ctx.fill();
+    }
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font='22px sans-serif'; ctx.fillText('📷',x,y-16);
+    ctx.fillStyle='#fff'; ctx.strokeStyle='#d32f2f'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(x+20,y-16,11,0,7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#000'; ctx.font='bold 11px sans-serif';
+    ctx.fillText(c.limit,x+20,y-16);
+  }
+ policeDraw(sx,sy,ppm);
+
+  if(dest && navRoute && navRoute.length > 1){
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(W/2, H/2);
+  for(const p of navRoute) ctx.lineTo(sx(p.x), sy(p.y));
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 9; ctx.stroke();
+  ctx.strokeStyle = '#ff4081'; ctx.lineWidth = 5; ctx.setLineDash([14, 10]); ctx.stroke();
+  ctx.restore();
+}
+
+// 導航目的地標記（畫面外時貼在邊緣）
+if(dest){
+  let x=sx(dest.x), y=sy(dest.y);
+  const m=30;
+  x=Math.max(m,Math.min(W-m,x)); y=Math.max(m,Math.min(H-m,y));
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='32px sans-serif'; ctx.fillText('📍',x,y);
+  ctx.font='bold 12px sans-serif'; ctx.lineWidth=3; ctx.strokeStyle='#000'; ctx.fillStyle='#fff';
+  ctx.strokeText(dest.name,x,y+22); ctx.fillText(dest.name,x,y+22);
+}
+
+  // 行人
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const p of peds){
+    const x=sx(p.x), y=sy(p.y);
+    if(x<-30||x>W+30||y<-30||y>H+30) continue;
+    ctx.font=Math.max(14,2.2*VIS*ppm)+'px sans-serif';
+    ctx.fillText(p.hit?'💫':(p.kind==='phone'?'📱':(p.kind==='jay'?'🏃':'👴')),x,y);
+  }
+  // AI 車輛
+  poiDraw(sx, sy);
+  rideDraw(sx, sy);
+  const TAG={cut:'🤪',wrong:'⛔',red:'🚦',weave:'🛵'};
+  for(const n of npcs){
+    const x=sx(n.x), y=sy(n.y);
+    if(x<-60||x>W+60||y<-60||y>H+60) continue;
+    const sc=n.type==='scooter';
+    const len=(sc?2.0:4.5)*VIS*ppm, wid=(sc?0.8:1.9)*VIS*ppm;
+    drawBox(x,y,n.ang,Math.max(len,sc?10:18),Math.max(wid,sc?5:9),'hsl('+n.hue+',70%,50%)');
+    if(n.turn && Math.floor(performance.now()/300)%2){
+    const L2=Math.max(len,sc?10:18)/2, W2=Math.max(wid,sc?5:9)/2;
+    const hx=Math.sin(n.ang), hy=-Math.cos(n.ang), rx=Math.cos(n.ang), ry=Math.sin(n.ang);
+    const bx=x+hx*L2+rx*W2*n.turn, by=y+hy*L2+ry*W2*n.turn;
+    ctx.fillStyle='#ff9800'; ctx.beginPath(); ctx.arc(bx,by,3.2,0,7); ctx.fill();
+    }
+
+    if(TAG[n.kind]){ctx.font='14px sans-serif';ctx.fillText(TAG[n.kind],x,y-Math.max(len,18)/2-8);}
+  }
+    parkDraw(sx, sy, ppm);
+    smokeDraw(sx, sy, ppm);
+  // 玩家
+    const pL = Math.max(4.5*VIS*ppm*CAR.size, 18*CAR.size);
+    const pW = Math.max(1.9*VIS*ppm*CAR.size, 9*CAR.size);
+    drawBox(W/2, H/2, car.heading, pL, pW, carColorDamaged(CAR.color));
+    sigDraw(W/2, H/2, car.heading, pL, pW);
+  // 玩家車頭小燈
+  ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(car.heading);
+  ctx.fillStyle='#ffee58'; const hl=Math.max(4.5*VIS*ppm*CAR.size,18*CAR.size)/2;
+  ctx.fillRect(-4,-hl-2,3,3); ctx.fillRect(1,-hl-2,3,3); ctx.restore();
+
+  envDraw(sx,sy,ppm);
+  miniDraw();
+}
+
+
+
+// ---------- 主迴圈 ----------
+let lvx=NaN, lvy=NaN, lvz=NaN;
+let last=performance.now();
+const fpsEl=document.createElement('div');
+fpsEl.className='hud';
+fpsEl.style.cssText='display:none;left:12px;bottom:100px;font-size:12px;padding:3px 10px';
+document.body.appendChild(fpsEl);
+let fpsOn=false, fpsN=0, fpsT=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  fpsN++;
+  if(now-fpsT>=500){
+    if(fpsOn) fpsEl.textContent=Math.round(fpsN*1000/(now-fpsT))+' FPS';
+    fpsN=0; fpsT=now;
+  }
+
+  try{ update(dt); }catch(err){ console.error('update 錯誤',err); }
+  try{
+    if(car.x!==lvx||car.y!==lvy||zoom!==lvz){
+      map.setView(carLL(),zoom,{animate:false});
+      lvx=car.x; lvy=car.y; lvz=zoom;
+    }
+    draw();
+  }catch(err){ console.error('draw 錯誤',err); }
+  requestAnimationFrame(loop);
+}
+sel.value=curCity;
+teleport(curCity);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
